@@ -12,6 +12,8 @@ static void loadInit(void);
 static void setCurrent(uint16_t val);
 static int16_t getEncoderOffset(void);
 static void saveCalibrationData(CalibrationData* cd);
+static void calcMeasuredParams(void);
+static void setFanSpeed(uint8_t fs);
 
 // inner functions
 static float calcCurrent(uint16_t adc_val);
@@ -21,7 +23,9 @@ LoadController lc_driver = {
 		loadInit,
 		setCurrent,
 		getEncoderOffset,
-		saveCalibrationData
+		saveCalibrationData,
+		calcMeasuredParams,
+		setFanSpeed,
 };
 LoadController* load_control_drv =  &lc_driver;
 
@@ -31,6 +35,7 @@ extern TIM_HandleTypeDef htim6;
 
 static uint16_t encoder_cntr = 32767;
 static uint16_t encoder_cntr_prev = 32767;
+static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 
 Data loadData = {0, 0, 0.0f, 0.1f, 0.0f, 0.0f, 0.0f, 20.0f, 0, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
@@ -101,6 +106,42 @@ static void saveCalibrationData(CalibrationData* cd)
 	HAL_FLASHEx_DATAEEPROM_Lock();
 }
 
+static void calcMeasuredParams(void)
+{
+	uint32_t adc_averaged_data[5] = {0};
+	// calc averaged ADC data
+	for(uint16_t i = 0; i < NUM_OF_SAMPLES; i++)
+	{
+		adc_averaged_data[i%5] += adcSamples[i];
+	}
+	for(uint16_t i = 0; i < 5; i++)
+	{
+		adc_averaged_data[i] /= NUM_OF_SAMPLES;
+	}
+	// convert them
+	loadData.vbat = 2*adc_averaged_data[0]*3.3f/4096;
+	loadData.vdac0 = adc_averaged_data[1];
+	loadData.vref = adc_averaged_data[2];
+	loadData.measured_current_raw = adc_averaged_data[3];
+	loadData.voltage_raw = (adc_averaged_data[4]);
+
+	loadData.measured_current = calcCurrent(adc_averaged_data[3]);
+	loadData.voltage = calcVoltage(adc_averaged_data[4]);
+
+	// calc mAh and Wh
+	if(loadData.measured_current >= MAH_CALC_LIMIT)
+	{
+		loadData.mAh += loadData.measured_current/36;
+		loadData.Wh += loadData.measured_current*loadData.voltage/36000;
+	}
+}
+
+static void setFanSpeed(uint8_t fs)
+{
+	if(fs > 99) fs = 99;
+	TIM21->CCR2 = fs;
+}
+
 static float calcCurrent(uint16_t adc_val)
 {
 	float current = 0.0f;
@@ -157,33 +198,6 @@ static float calcVoltage(uint16_t adc_val)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	UNUSED(hadc);
-	uint32_t adc_averaged_data[5] = {0};
-	// calc averaged ADC data
-	for(uint16_t i = 0; i < NUM_OF_SAMPLES; i++)
-	{
-		adc_averaged_data[i%5] += adcSamples[i];
-	}
-	for(uint16_t i = 0; i < 5; i++)
-	{
-		adc_averaged_data[i] /= NUM_OF_SAMPLES;
-	}
-	// convert them
-	loadData.vbat = 2*adc_averaged_data[0]*3.3f/4096;
-	loadData.vdac0 = adc_averaged_data[1];
-	loadData.vref = adc_averaged_data[2];
-	loadData.measured_current_raw = adc_averaged_data[3];
-	loadData.voltage_raw = (adc_averaged_data[4]);
-
-	loadData.measured_current = calcCurrent(adc_averaged_data[3]);
-	loadData.voltage = calcVoltage(adc_averaged_data[4]);
-
-	// calc mAh and Wh
-	if(loadData.measured_current >= MAH_CALC_LIMIT)
-	{
-		loadData.mAh += loadData.measured_current/36;
-		loadData.Wh += loadData.measured_current*loadData.voltage/36000;
-	}
-
 	// set flag
 	loadData.is_conversion_ended = 1;
 }
@@ -214,7 +228,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			else if (uwIC2Value1 < uwIC2Value2)
 			{
 				/* 0xFFFF is max TIM1_CCRx value */
-				uwDiffCapture = ((TIM21->ARR - uwIC2Value2) + uwIC2Value1) + 1;
+				uwDiffCapture = uwIC2Value2 + uwIC2Value1;
 			}
 			else
 			{
@@ -222,6 +236,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 					 measures */
 				uwDiffCapture = 1;
 			}
+
+			uwDiffCapture += rpm_cntr*(TIM21->ARR+1);
 		}
 		else if(uhCaptureIndex == 1)
 		{
@@ -236,7 +252,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			else if (uwIC2Value2 < uwIC2Value1)
 			{
 				/* 0xFFFF is max TIM1_CCRx value */
-				uwDiffCapture = ((TIM21->ARR - uwIC2Value1) + uwIC2Value2) + 1;
+				uwDiffCapture = uwIC2Value1 + uwIC2Value2;
 			}
 			else
 			{
@@ -244,10 +260,14 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 					 measures */
 				uwDiffCapture = 1;
 			}
+
+			uwDiffCapture += rpm_cntr*(TIM21->ARR+1);
 			uhCaptureIndex = 0;
 		}
 		/* Frequency computation: for this example TIMx (TIM1) is clocked by APB1Clk */
-		loadData.rpm = 320000.0f/uwDiffCapture*60.0f;
+		loadData.rpm = 19200000/uwDiffCapture;
+		uwDiffCapture = 0;
+		rpm_cntr = 0;
 	}
 }
 
@@ -255,7 +275,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if(htim->Instance == TIM21)
 	{
-
+		if(rpm_cntr < 3500)
+			rpm_cntr++;
+		else
+		{
+			loadData.rpm = 0;
+		}
 	}
 	else if(htim->Instance == TIM22)
 	{

@@ -80,7 +80,7 @@ static void MX_TIM21_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM22_Init(void);
 /* USER CODE BEGIN PFP */
-static void MX_TIM22_Init(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -248,6 +248,8 @@ int main(void)
 	  if(loadData.is_conversion_ended)
 	  {
 		  loadData.is_conversion_ended = 0;
+		  // update ADC measured params
+		  load_control_drv->calcMeasuredParams();
 		  // update display data
 		  st7565_drv->clearBuffer();
 		  CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
@@ -569,11 +571,11 @@ static void MX_TIM21_Init(void)
 
   /* USER CODE END TIM21_Init 1 */
   htim21.Instance = TIM21;
-  htim21.Init.Prescaler = 0;
+  htim21.Init.Prescaler = 24;
   htim21.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim21.Init.Period = 2499;
+  htim21.Init.Period = 99;
   htim21.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim21.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim21.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim21) != HAL_OK)
   {
     Error_Handler();
@@ -597,7 +599,7 @@ static void MX_TIM21_Init(void)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
   sConfigIC.ICFilter = 15;

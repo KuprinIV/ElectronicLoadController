@@ -63,6 +63,8 @@ typedef struct
 	void (*setCurrent)(uint16_t val);
 	int16_t (*getEncoderOffset)(void);
 	void (*saveCalibrationData)(CalibrationData* cd);
+	void (*calcMeasuredParams)(void);
+	void (*setFanSpeed)(uint8_t fs);
 }LoadController;
 
 extern LoadController* load_control_drv;
