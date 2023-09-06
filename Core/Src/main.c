@@ -56,12 +56,14 @@ TIM_HandleTypeDef htim21;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+TIM_HandleTypeDef htim22;
+
 Window MenuWnd;
 Window DispMainWnd;
 Window SetupWnds[4];
 pWindow CurrentWnd = &DispMainWnd;
 
-Data loadData = {10.2f, 24.5f, 1568.0f, 31.3f, 45.2f, 1558, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 80, 800, 2000}, 1, 3.78f, 250};
+volatile Data loadData = {0, 0, 10.2f, 24.5f, 1568.0f, 31.3f, 45.2f, 1558, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 80, 800, 2000}, 1, 3.78f, 250};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,7 +78,7 @@ static void MX_SPI1_Init(void);
 static void MX_TIM21_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void MX_TIM22_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -91,7 +93,10 @@ static void MX_USART1_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	pWindow temp_wnd;
+	uint8_t level = 0;
+	uint8_t ec_btn_prev_state = 0;
+	Action encoder_offset_action = NoAction;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -121,6 +126,9 @@ int main(void)
   MX_TIM21_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  MX_TIM22_Init();
+
+  // init display
   st7565_drv->displayInit();
 
   // init windows
@@ -147,6 +155,82 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(loadData.is_update_event)
+	  {
+		  loadData.is_update_event = 0;
+		  // handle encoder button pressed event
+		  if((EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && ec_btn_prev_state) // button was released
+		  {
+			  ec_btn_prev_state = 0;
+		  }
+		  if(!(EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && !ec_btn_prev_state) // button was pressed
+		  {
+				ec_btn_prev_state = 1;
+
+				st7565_drv->clearBuffer();
+				switch(level)
+				{
+					case 0:
+						temp_wnd = CurrentWnd;
+						CurrentWnd = &MenuWnd;
+						CurrentWnd->prev = temp_wnd;
+						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+						level++;
+						break;
+
+					case 1:
+						if(loadData.menu_current_item == SETTINGS_ITEMS_NUM)
+						{
+							CurrentWnd = CurrentWnd->prev;
+							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+							loadData.menu_current_item = 1;
+							level--;
+						}
+						else
+						{
+							temp_wnd = CurrentWnd;
+							CurrentWnd = &(SetupWnds[loadData.menu_current_item-1]);
+							CurrentWnd->prev = temp_wnd;
+							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+							level++;
+						}
+						break;
+
+					case 2:
+						if(CurrentWnd->callback(CurrentWnd,&loadData,Next,NoAction) == 0)
+						{
+							level--;
+							CurrentWnd = CurrentWnd->prev;
+							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+						}
+						break;
+				}
+
+				st7565_drv->updateBuffer();
+		  }
+		  // handle encoder offset event
+		  loadData.encoder_offset = getEncoderOffset();
+		  if(loadData.encoder_offset != 0)
+		  {
+			  encoder_offset_action = (loadData.encoder_offset > 0) ? Next : Prev;
+			  st7565_drv->clearBuffer();
+		        switch(level)
+		        {
+		            case 0:
+		                CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+		                break;
+
+		            case 1:
+		                CurrentWnd->callback(CurrentWnd,&loadData,encoder_offset_action,NoAction);
+		                break;
+
+		            case 2:
+		                CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+		                break;
+		        }
+		        st7565_drv->updateBuffer();
+		  }
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -349,7 +433,7 @@ static void MX_SPI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
-//  hspi1.Instance->CR1 |= SPI_CR1_SPE; // enable SPI1
+
   /* USER CODE END SPI1_Init 2 */
 
 }
@@ -389,7 +473,7 @@ static void MX_TIM2_Init(void)
   }
   sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
   sSlaveConfig.InputTrigger = TIM_TS_TI1FP1;
-  sSlaveConfig.TriggerPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sSlaveConfig.TriggerPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
   sSlaveConfig.TriggerFilter = 0;
   if (HAL_TIM_SlaveConfigSynchro(&htim2, &sSlaveConfig) != HAL_OK)
   {
@@ -402,20 +486,15 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
   sConfigIC.ICFilter = 15;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM2_Init 2 */
-
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
   /* USER CODE END TIM2_Init 2 */
 
 }
@@ -605,7 +684,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : EC_BTN_Pin OVT_Pin */
-  GPIO_InitStruct.Pin = EC_BTN_Pin|OVT_Pin;
+  GPIO_InitStruct.Pin = EC_BTN_Pin|OVT_Pin|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -633,7 +712,19 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+static void MX_TIM22_Init(void)
+{
+	htim22.Instance = TIM22;
+	htim22.Init.Prescaler = 399;
+	htim22.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim22.Init.Period = 99;
+	htim22.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+	if (HAL_TIM_Base_Init(&htim22) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	HAL_TIM_Base_Start_IT(&htim22);
+}
 /* USER CODE END 4 */
 
 /**

@@ -64,7 +64,7 @@ extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim6;
 extern TIM_HandleTypeDef htim21;
 /* USER CODE BEGIN EV */
-
+extern TIM_HandleTypeDef htim22;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -233,6 +233,18 @@ void SPI1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+/**
+  * @brief This function handles TIM21 global interrupt.
+  */
+void TIM22_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM21_IRQn 0 */
 
+  /* USER CODE END TIM21_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim22);
+  /* USER CODE BEGIN TIM21_IRQn 1 */
+
+  /* USER CODE END TIM21_IRQn 1 */
+}
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

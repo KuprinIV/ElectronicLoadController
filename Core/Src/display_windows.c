@@ -1,7 +1,6 @@
 /*
  * display_windows.c
  *
- *  Created on: 5 сент. 2023 г.
  *      Author: Kuprin_IV
  */
 #include "display_windows.h"
@@ -47,7 +46,7 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = data->is_ovt == 1 ? Inverted : NotInverted;
-    sprintf(wnd->strings[0].Text, "%0.1f°C", data->temperature);
+    sprintf(wnd->strings[0].Text, "%0.1f�C", data->temperature);
 
     wnd->strings[1].x_pos = 70;
     wnd->strings[1].y_pos = 2;
@@ -240,7 +239,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    sprintf(wnd->strings[1].Text, "Mode:");
+    sprintf(wnd->strings[0].Text, "Mode:");
 
     wnd->strings[1].x_pos = 50;
     wnd->strings[1].y_pos = 5;
@@ -295,7 +294,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
 
 int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* max_power_space[3] = {" ", "  ", "   "};
+    const char* max_power_space[3] = {" \0", "  \0", "   \0"};
     int index = 2;
     int steps_num = 0;
     float step = 0.01f;
@@ -370,7 +369,7 @@ int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action valu
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = font6x8;
     wnd->strings[2].inverted = Inverted;
-    sprintf(wnd->strings[1].Text, "   Ok   ");
+    sprintf(wnd->strings[2].Text, "   Ok   ");
 
     wnd->StringsQuantity = 3;
 

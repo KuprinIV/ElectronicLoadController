@@ -24,6 +24,8 @@ typedef struct
 
 typedef struct
 {
+	uint8_t is_update_event;
+	int16_t encoder_offset;
     float current;
     float voltage;
     float mAh;
@@ -40,5 +42,7 @@ typedef struct
     float vbat;
     int max_power;
 }Data,*pData;
+
+int16_t getEncoderOffset(void);
 
 #endif /* INC_LOAD_CONTROL_H_ */
