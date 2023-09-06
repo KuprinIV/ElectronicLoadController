@@ -6,12 +6,13 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2016 STMicroelectronics.
-  * All rights reserved.
+  * <h2><center>&copy; Copyright(c) 2016 STMicroelectronics.
+  * All rights reserved.</center></h2>
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
@@ -21,7 +22,7 @@
 #define __STM32L0xx_HAL_ADC_EX_H
 
 #ifdef __cplusplus
-extern "C" {
+ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -33,7 +34,7 @@ extern "C" {
 
 /** @addtogroup ADCEx
   * @{
-  */
+  */ 
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
@@ -95,7 +96,7 @@ extern "C" {
 /**
   * @}
   */
-
+   
 /**
   * @}
   */
@@ -110,7 +111,7 @@ extern "C" {
 
 /** @defgroup ADCEx_calibration_factor_length_verification ADC Calibration Factor Length Verification
   * @{
-  */
+  */ 
 /**
   * @brief Calibration factor length verification (7 bits maximum)
   * @param _Calibration_Factor_: Calibration factor value
@@ -119,7 +120,7 @@ extern "C" {
 #define IS_ADC_CALFACT(_Calibration_Factor_) ((_Calibration_Factor_) <= (0x7FU))
 /**
   * @}
-  */
+  */ 
 
 /** @defgroup ADC_External_trigger_Source ADC External Trigger Source
   * @{
@@ -179,11 +180,11 @@ extern "C" {
 /* IO operation functions *****************************************************/
 
 /* ADC calibration */
-HAL_StatusTypeDef   HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef *hadc, uint32_t SingleDiff);
-uint32_t            HAL_ADCEx_Calibration_GetValue(ADC_HandleTypeDef *hadc, uint32_t SingleDiff);
-HAL_StatusTypeDef   HAL_ADCEx_Calibration_SetValue(ADC_HandleTypeDef *hadc, uint32_t SingleDiff, uint32_t CalibrationFactor);
+HAL_StatusTypeDef   HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef* hadc, uint32_t SingleDiff);
+uint32_t            HAL_ADCEx_Calibration_GetValue(ADC_HandleTypeDef* hadc, uint32_t SingleDiff);
+HAL_StatusTypeDef   HAL_ADCEx_Calibration_SetValue(ADC_HandleTypeDef* hadc, uint32_t SingleDiff, uint32_t CalibrationFactor);
 
-/* ADC VrefInt and Temperature sensor functions specific to this STM32 series */
+/* ADC VrefInt and Temperature sensor functions specific to this STM32 serie */
 HAL_StatusTypeDef   HAL_ADCEx_EnableVREFINT(void);
 void                HAL_ADCEx_DisableVREFINT(void);
 HAL_StatusTypeDef   HAL_ADCEx_EnableVREFINTTempSensor(void);
@@ -211,3 +212,5 @@ void                HAL_ADCEx_DisableVREFINTTempSensor(void);
 
 #endif /*__STM32L0xx_HAL_ADC_EX_H */
 
+
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

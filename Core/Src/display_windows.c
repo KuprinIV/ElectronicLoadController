@@ -4,6 +4,7 @@
  *      Author: Kuprin_IV
  */
 #include "display_windows.h"
+#include "load_control.h"
 #include <stdio.h>
 
 static float GetCurrentChangeStep(float current);
@@ -22,7 +23,7 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
     int steps_num = (int)(max_current/step);
     max_current = steps_num*step;
 
-    step = GetCurrentChangeStep(data->current);
+    step = GetCurrentChangeStep(data->set_current);
 
     switch(value_action)
     {
@@ -31,13 +32,13 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
             break;
 
         case Prev:
-            if(data->current > 0.01f) data->current -= step;
-            else data->current = 0;
+            if(data->set_current > 0.01f) data->set_current -= step;
+            else data->set_current = 0;
             break;
 
         case Next:
-            if(data->current < max_current) data->current += step;
-            else data->current = max_current;
+            if(data->set_current < max_current) data->set_current += step;
+            else data->set_current = max_current;
             break;
     }
 
@@ -60,13 +61,13 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = MSSanSerif_14;
     wnd->strings[2].inverted = NotInverted;
-    if(data->current >= 5.0f)
+    if(data->measured_current >= 5.0f)
     {
-        sprintf(wnd->strings[2].Text, "%0.1f B  %0.1f A", data->voltage, data->current);
+        sprintf(wnd->strings[2].Text, "%0.1f B  %0.1f A", data->voltage, data->measured_current);
     }
     else
     {
-        sprintf(wnd->strings[2].Text, "%0.1f B  %0.2f A", data->voltage, data->current);
+        sprintf(wnd->strings[2].Text, "%0.1f B  %0.2f A", data->voltage, data->measured_current);
     }
 
     wnd->strings[3].x_pos = 0;
@@ -90,30 +91,30 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
     wnd->strings[5].inverted = NotInverted;
     if(data->load_work_mode == BatteryDischarge)
     {
-        if(data->current >= 5.0f)
+        if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.1fA", data->discharge_voltage, data->current);
+            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.1fA", data->discharge_voltage, data->set_current);
         }
         else
         {
-            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.2fA", data->discharge_voltage, data->current);
+            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.2fA", data->discharge_voltage, data->set_current);
         }
     }
     else
     {
-        if(data->current >= 5.0f)
+        if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[5].Text, "Iset:%0.1fA", data->current);
+            sprintf(wnd->strings[5].Text, "Iset:%0.1fA", data->set_current);
         }
         else
         {
-            sprintf(wnd->strings[5].Text, "Iset:%0.2fA", data->current);
+            sprintf(wnd->strings[5].Text, "Iset:%0.2fA", data->set_current);
         }
     }
 
     wnd->StringsQuantity = 6;
 
-    st7565_drv->drawBatteryIndicator(105, 2, 8);
+    st7565_drv->drawBatteryIndicator(105, 1, 8);
     st7565_drv->drawFanIndicator(56, 0);
 
     st7565_drv->setWindow(wnd);
@@ -341,13 +342,13 @@ int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action valu
         index = 0;
     }
 
-    if(data->current > (float)data->max_power/data->voltage+0.01f)
+    if(data->set_current > (float)data->max_power/data->voltage+0.01f)
     {
-        data->current = (float)data->max_power/data->voltage;
+        data->set_current = (float)data->max_power/data->voltage;
         // round current value to nearest step value
-        step = GetCurrentChangeStep(data->current);
-        steps_num = (int)(data->current/step);
-        data->current = steps_num*step;
+        step = GetCurrentChangeStep(data->set_current);
+        steps_num = (int)(data->set_current/step);
+        data->set_current = steps_num*step;
     }
 
     wnd->strings[0].x_pos = 15;
@@ -383,11 +384,16 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
     const char* refs[6] = {"0,1A", "1A", " 5A", "1V", "10V", "25V"};
     int calibration_items_num = 7;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
-    uint16_t coef_temp = 0;
 
     switch(item_action)
     {
         case NoAction:
+            if(data->calibration_current_item < 4)
+            {
+                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
+            }
+        	break;
+
         case Prev:
         default:
             break;
@@ -396,7 +402,12 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             if(++data->calibration_current_item > calibration_items_num)
             {
                 data->calibration_current_item = 1;
+                load_control_drv->saveCalibrationData(&data->calibration_data);
                 return 0;
+            }
+            else if(data->calibration_current_item < 4)
+            {
+                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
             }
             break;
     }
@@ -411,6 +422,7 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             if(data->calibration_current_item < 4)
             {
                 calibration_data_ptr[data->calibration_current_item - 1]++;
+                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
             }
             break;
 
@@ -418,11 +430,10 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             if(data->calibration_current_item < 4)
             {
                 calibration_data_ptr[data->calibration_current_item - 1]--;
+                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
             }
             break;
     }
-
-    coef_temp = calibration_data_ptr[data->calibration_current_item - 1];
 
     wnd->strings[0].x_pos = 0;
     wnd->strings[0].y_pos = 5;
@@ -435,27 +446,42 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
         sprintf(wnd->strings[0].Text, "%s calibration", modes[(data->calibration_current_item-1)>>2]);
 
         wnd->strings[1].x_pos = 0;
-        wnd->strings[1].y_pos = 25;
+        wnd->strings[1].y_pos = 18;
         wnd->strings[1].align = AlignCenter;
         wnd->strings[1].font = font6x8;
         wnd->strings[1].inverted = NotInverted;
         sprintf(wnd->strings[1].Text, "Set current %s", refs[data->calibration_current_item-1]);
 
-        wnd->strings[2].x_pos = 0;
-        wnd->strings[2].y_pos = 35;
-        wnd->strings[2].align = AlignCenter;
-        wnd->strings[2].font = font6x8;
-        wnd->strings[2].inverted = Inverted;
-        sprintf(wnd->strings[2].Text, "%d", coef_temp);
+        wnd->strings[2].x_pos = 40;
+		wnd->strings[2].y_pos = 28;
+		wnd->strings[2].align = AlignLeft;
+		wnd->strings[2].font = font6x8;
+		wnd->strings[2].inverted = NotInverted;
+		sprintf(wnd->strings[2].Text, "Set:");
 
-        wnd->strings[3].x_pos = 0;
-		wnd->strings[3].y_pos = 55;
-		wnd->strings[3].align = AlignCenter;
-		wnd->strings[3].font = font6x8;
-		wnd->strings[3].inverted = Inverted;
-		sprintf(wnd->strings[3].Text, "   Ok   ");
+        wnd->strings[3].x_pos = 40;
+        wnd->strings[3].y_pos = 28;
+        wnd->strings[3].align = AlignCenter;
+        wnd->strings[3].font = font6x8;
+        wnd->strings[3].inverted = Inverted;
+        sprintf(wnd->strings[3].Text, "%d", calibration_data_ptr[data->calibration_current_item - 1]);
 
-        wnd->StringsQuantity = 4;
+        wnd->strings[4].x_pos = 0;
+        wnd->strings[4].y_pos = 38;
+        wnd->strings[4].align = AlignCenter;
+        wnd->strings[4].font = font6x8;
+        wnd->strings[4].inverted = NotInverted;
+//        calibration_data_ptr[data->calibration_current_item + 2] = data->measured_current_raw;
+        sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[data->calibration_current_item + 2]);
+
+        wnd->strings[5].x_pos = 0;
+		wnd->strings[5].y_pos = 55;
+		wnd->strings[5].align = AlignCenter;
+		wnd->strings[5].font = font6x8;
+		wnd->strings[5].inverted = Inverted;
+		sprintf(wnd->strings[5].Text, "   Ok   ");
+
+        wnd->StringsQuantity = 6;
     }
     else
     {
@@ -482,18 +508,19 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             sprintf(wnd->strings[0].Text, "%s calibration", modes[data->calibration_current_item>>2]);
 
             wnd->strings[1].x_pos = 0;
-            wnd->strings[1].y_pos = 25;
+            wnd->strings[1].y_pos = 18;
             wnd->strings[1].align = AlignCenter;
             wnd->strings[1].font = font6x8;
             wnd->strings[1].inverted = NotInverted;
             sprintf(wnd->strings[1].Text, "Set voltage %s", refs[data->calibration_current_item-1]);
 
             wnd->strings[2].x_pos = 0;
-            wnd->strings[2].y_pos = 35;
+            wnd->strings[2].y_pos = 28;
             wnd->strings[2].align = AlignCenter;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
-            sprintf(wnd->strings[2].Text, "%d", coef_temp);
+//            calibration_data_ptr[data->calibration_current_item + 2] = data->voltage_raw;
+            sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[data->calibration_current_item + 2]);
 
             wnd->strings[3].x_pos = 0;
             wnd->strings[3].y_pos = 55;

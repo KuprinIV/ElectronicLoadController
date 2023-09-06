@@ -451,20 +451,20 @@ static void ST7565_FillEllipse(uint8_t Xpos, uint8_t Ypos, uint8_t XRadius, uint
 
 static void ST7565_DrawBatteryIndicator(uint8_t xn, uint8_t yn, uint8_t percentage)
 {
-    uint8_t BatteryBorder[12] = {0x7E,0xC3,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0xFF};
+	uint8_t BatteryBorder[12] = {0x3C,0x66,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x7E};
     // fill indicator by percentage
     for(uint8_t i = 0; i < percentage; i++)
     {
     	if(i < 9)
     	{
-    		BatteryBorder[10-i] |= 0x7E;
+    		BatteryBorder[10-i] |= 0x3C;
     	}
     	else
     	{
-    		BatteryBorder[10-i] |= 0x3C;
+    		BatteryBorder[10-i] |= 0x18;
     	}
     }
-    ST7565_drawBitmap(BatteryBorder, xn, yn, 12, 8);
+    ST7565_drawBitmap(BatteryBorder, xn, yn, 12, 6);
 }
 
 static void ST7565_DrawFanIndicator(uint8_t xn, uint8_t yn)

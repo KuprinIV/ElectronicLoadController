@@ -52,6 +52,7 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim21;
+TIM_HandleTypeDef htim22;
 
 UART_HandleTypeDef huart1;
 
@@ -63,7 +64,7 @@ Window DispMainWnd;
 Window SetupWnds[4];
 pWindow CurrentWnd = &DispMainWnd;
 
-volatile Data loadData = {0, 0, 10.2f, 24.5f, 1568.0f, 31.3f, 45.2f, 1558, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 80, 800, 2000}, 1, 3.78f, 250};
+extern Data loadData;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,6 +78,7 @@ static void MX_TIM6_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM21_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM22_Init(void);
 /* USER CODE BEGIN PFP */
 static void MX_TIM22_Init(void);
 /* USER CODE END PFP */
@@ -97,6 +99,7 @@ int main(void)
 	uint8_t level = 0;
 	uint8_t ec_btn_prev_state = 0;
 	Action encoder_offset_action = NoAction;
+	int16_t encoder_offset = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -125,11 +128,15 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM21_Init();
   MX_USART1_UART_Init();
+  MX_TIM22_Init();
   /* USER CODE BEGIN 2 */
   MX_TIM22_Init();
 
   // init display
   st7565_drv->displayInit();
+
+  // init load control
+  load_control_drv->loadInit();
 
   // init windows
   DispMainWnd.callback = &DisplayMainWindow;
@@ -158,6 +165,7 @@ int main(void)
 	  if(loadData.is_update_event)
 	  {
 		  loadData.is_update_event = 0;
+
 		  // handle encoder button pressed event
 		  if((EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && ec_btn_prev_state) // button was released
 		  {
@@ -166,8 +174,9 @@ int main(void)
 		  if(!(EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && !ec_btn_prev_state) // button was pressed
 		  {
 				ec_btn_prev_state = 1;
-
+				// clear display buffer data
 				st7565_drv->clearBuffer();
+
 				switch(level)
 				{
 					case 0:
@@ -205,31 +214,44 @@ int main(void)
 						}
 						break;
 				}
-
-				st7565_drv->updateBuffer();
 		  }
+
 		  // handle encoder offset event
-		  loadData.encoder_offset = getEncoderOffset();
-		  if(loadData.encoder_offset != 0)
+		  encoder_offset = load_control_drv->getEncoderOffset();
+		  if(encoder_offset != 0)
 		  {
-			  encoder_offset_action = (loadData.encoder_offset > 0) ? Next : Prev;
-			  st7565_drv->clearBuffer();
-		        switch(level)
-		        {
-		            case 0:
-		                CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
-		                break;
+				encoder_offset_action = (encoder_offset > 0) ? Next : Prev;
+				// clear display buffer data
+				st7565_drv->clearBuffer();
 
-		            case 1:
-		                CurrentWnd->callback(CurrentWnd,&loadData,encoder_offset_action,NoAction);
-		                break;
+				switch(level)
+				{
+					case 0:
+						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+						break;
 
-		            case 2:
-		                CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
-		                break;
-		        }
-		        st7565_drv->updateBuffer();
+					case 1:
+						CurrentWnd->callback(CurrentWnd,&loadData,encoder_offset_action,NoAction);
+						break;
+
+					case 2:
+						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+						break;
+				}
 		  }
+
+		  // update display data
+		  st7565_drv->updateBuffer();
+	  }
+
+	  // handle end of ADC data conversion event
+	  if(loadData.is_conversion_ended)
+	  {
+		  loadData.is_conversion_ended = 0;
+		  // update display data
+		  st7565_drv->clearBuffer();
+		  CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
+		  st7565_drv->updateBuffer();
 	  }
   }
   /* USER CODE END 3 */
@@ -306,12 +328,12 @@ static void MX_ADC_Init(void)
   hadc.Init.SamplingTime = ADC_SAMPLETIME_160CYCLES_5;
   hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
   hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc.Init.ContinuousConvMode = ENABLE;
+  hadc.Init.ContinuousConvMode = DISABLE;
   hadc.Init.DiscontinuousConvMode = DISABLE;
   hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T6_TRGO;
-  hadc.Init.DMAContinuousRequests = DISABLE;
-  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.DMAContinuousRequests = ENABLE;
+  hadc.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc.Init.LowPowerAutoWait = DISABLE;
   hadc.Init.LowPowerFrequencyMode = DISABLE;
@@ -420,10 +442,10 @@ static void MX_SPI1_Init(void)
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_1LINE;
   hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
-  hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -450,9 +472,8 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 0 */
 
-  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+  TIM_Encoder_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -463,19 +484,16 @@ static void MX_TIM2_Init(void)
   htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
-  sSlaveConfig.InputTrigger = TIM_TS_TI1FP1;
-  sSlaveConfig.TriggerPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
-  sSlaveConfig.TriggerFilter = 0;
-  if (HAL_TIM_SlaveConfigSynchro(&htim2, &sSlaveConfig) != HAL_OK)
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_FALLING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 15;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_FALLING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 15;
+  if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -485,16 +503,9 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 15;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM2_Init 2 */
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  TIM2->CNT = 32767;
+  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_1);
   /* USER CODE END TIM2_Init 2 */
 
 }
@@ -558,9 +569,9 @@ static void MX_TIM21_Init(void)
 
   /* USER CODE END TIM21_Init 1 */
   htim21.Instance = TIM21;
-  htim21.Init.Prescaler = 3;
+  htim21.Init.Prescaler = 0;
   htim21.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim21.Init.Period = 99;
+  htim21.Init.Period = 2499;
   htim21.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim21.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim21) != HAL_OK)
@@ -595,7 +606,7 @@ static void MX_TIM21_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 49;
+  sConfigOC.Pulse = 10;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim21, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
@@ -606,6 +617,55 @@ static void MX_TIM21_Init(void)
 
   /* USER CODE END TIM21_Init 2 */
   HAL_TIM_MspPostInit(&htim21);
+
+  HAL_TIM_Base_Start_IT(&htim21);
+  HAL_TIM_IC_Start_IT(&htim21, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim21, TIM_CHANNEL_2);
+
+}
+
+/**
+  * @brief TIM22 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM22_Init(void)
+{
+
+  /* USER CODE BEGIN TIM22_Init 0 */
+
+  /* USER CODE END TIM22_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM22_Init 1 */
+
+  /* USER CODE END TIM22_Init 1 */
+  htim22.Instance = TIM22;
+  htim22.Init.Prescaler = 399;
+  htim22.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim22.Init.Period = 99;
+  htim22.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim22.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim22) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim22, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim22, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM22_Init 2 */
+  HAL_TIM_Base_Start_IT(&htim22);
+  /* USER CODE END TIM22_Init 2 */
 
 }
 
@@ -684,7 +744,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : EC_BTN_Pin OVT_Pin */
-  GPIO_InitStruct.Pin = EC_BTN_Pin|OVT_Pin|GPIO_PIN_1;
+  GPIO_InitStruct.Pin = EC_BTN_Pin|OVT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -712,19 +772,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-static void MX_TIM22_Init(void)
-{
-	htim22.Instance = TIM22;
-	htim22.Init.Prescaler = 399;
-	htim22.Init.CounterMode = TIM_COUNTERMODE_UP;
-	htim22.Init.Period = 99;
-	htim22.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-	if (HAL_TIM_Base_Init(&htim22) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	HAL_TIM_Base_Start_IT(&htim22);
-}
+
 /* USER CODE END 4 */
 
 /**
@@ -759,4 +807,3 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
