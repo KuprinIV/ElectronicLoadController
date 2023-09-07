@@ -6,6 +6,7 @@
  */
 #include "st7565.h"
 #include <string.h>
+#include <stdio.h>
 
 #define ABS(x) (x) >= 0 ? (x):(-x)
 
@@ -16,6 +17,7 @@ static void ST7565_drawBitmap(uint8_t* bmp, uint8_t x, uint8_t y, uint8_t width,
 
 // driver functions
 static void ST7565_DisplayInit(void);
+static void ST7565_DisplayReset(void);
 static void ST7565_ClearBuffer(void);
 static void ST7565_UpdateBuffer(void);
 static void ST7565_SetBrightness(uint8_t brightness);
@@ -32,11 +34,13 @@ static void ST7565_FillCircle(uint8_t Xpos, uint8_t Ypos, uint8_t Radius);
 static void ST7565_FillEllipse(uint8_t Xpos, uint8_t Ypos, uint8_t XRadius, uint8_t YRadius);
 static void ST7565_DrawBatteryIndicator(uint8_t xn, uint8_t yn, uint8_t percentage);
 static void ST7565_DrawFanIndicator(uint8_t xn, uint8_t yn);
+static void ST7565_DrawOnOffButton(uint8_t xn, uint8_t yn, uint8_t state);
 
 // variables
 extern SPI_HandleTypeDef hspi1;
 ST7565_Drv st7565_driver = {
 		ST7565_DisplayInit,
+		ST7565_DisplayReset,
 		ST7565_ClearBuffer,
 		ST7565_UpdateBuffer,
 		ST7565_SetBrightness,
@@ -52,7 +56,8 @@ ST7565_Drv st7565_driver = {
 		ST7565_FillCircle,
 		ST7565_FillEllipse,
 		ST7565_DrawBatteryIndicator,
-		ST7565_DrawFanIndicator
+		ST7565_DrawFanIndicator,
+		ST7565_DrawOnOffButton
 };
 ST7565_Drv* st7565_drv = &st7565_driver;
 
@@ -153,6 +158,17 @@ static void ST7565_DisplayInit(void)
 	ST7565_writeCommand(CMD_DISPLAY_ON);
 	ST7565_writeCommand(CMD_SET_ALLPTS_NORMAL);
 	ST7565_SetBrightness(10);
+}
+
+/**
+  * @brief  Reset ST7565 display
+  * @param  none
+  * @retval none
+  */
+static void ST7565_DisplayReset(void)
+{
+	// make reset
+	RST_GPIO_Port->BRR = RST_Pin;
 }
 
 /**
@@ -603,5 +619,57 @@ static void ST7565_DrawFanIndicator(uint8_t xn, uint8_t yn)
     uint8_t fan_bitmap[24] = {0x1E,0x91,0xA1,0xA1,0xFE,0x90,0x9C,0xF3,0x51,0x51,0x91,0x8E,
     							0x07,0x08,0x08,0x08,0x0C,0x03,0x00,0x07,0x08,0x08,0x08,0x07};
 	ST7565_drawBitmap(fan_bitmap, xn, yn, 12, 12);
+}
+
+/**
+  * @brief  Write on/off load button bitmap data in framebuffer
+  * @param  xn - x-coordinate of top-left corner
+  * @param  yn - y-coordinate of top-left corner
+  * @param  state: 0 - draw off button, 1 - draw on button
+  * @retval none
+  */
+static void ST7565_DrawOnOffButton(uint8_t xn, uint8_t yn, uint8_t state)
+{
+	const char* labels[2] = {"Off", "On"};
+	uint8_t margins[2] = {4, 7};
+	String str = {xn+margins[state], yn+1, AlignLeft, font6x8, "", state == 1 ? Inverted : NotInverted};
+	sprintf(str.Text, "%s", labels[state]);
+	uint8_t button_border[50] = {0xFC, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0xFC,
+								 0x01, 0x02, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x02, 0x01};
+	if(state)
+	{
+		// fill empty button space
+		for(int i = 1; i < 6; i++)
+		{
+			if(i == 1)
+			{
+			   button_border[i] |= 0xFC;
+			   button_border[i+25] |= 0x01;
+			}
+			else
+			{
+				button_border[i] |= 0xFE;
+				button_border[i+25] |= 0x03;
+			}
+		}
+
+		for(int i = 20; i < 24; i++)
+		{
+			if(i == 24)
+			{
+			   button_border[i] |= 0xFC;
+			   button_border[i+25] |= 0x01;
+			}
+			else
+			{
+				button_border[i] |= 0xFE;
+				button_border[i+25] |= 0x03;
+			}
+		}
+	}
+
+	// draw text and border
+	ST7565_SetStringInBuffer(&str);
+	ST7565_drawBitmap(button_border, xn, yn, 25, 11);
 }
 

@@ -12,9 +12,12 @@
 
 #define NUM_OF_SAMPLES 			100
 #define EEPROM_CAL_DATA_ADDR 	0x08080000
+#define EEPROM_LOAD_SET_ADDR 	0x08080020
 #define MAH_CALC_LIMIT 			0.01f
+#define VBAT_LOW				3.4f
+#define POWER_OFF_TICKS			30
 
-typedef enum {SimpleLoad, BatteryDischarge} LoadMode;
+typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
 
 typedef struct
 {
@@ -31,10 +34,20 @@ typedef struct
 
 typedef struct
 {
+    LoadMode load_work_mode;
+    float discharge_voltage;
+    uint16_t max_power;
+    uint8_t display_contrast;
+    uint16_t current_ramp_time;
+}LoadSettings;
+
+typedef struct
+{
 	// flags
 	volatile uint8_t is_update_event;
 	volatile uint8_t is_conversion_ended;
 	uint8_t is_ovt;
+	uint8_t on_state;
 	// set and measured parameters
 	float set_current;
     float measured_current;
@@ -47,9 +60,7 @@ typedef struct
     // calibration data
     CalibrationData calibration_data;
     // settings
-    LoadMode load_work_mode;
-    float discharge_voltage;
-    uint16_t max_power;
+    LoadSettings load_settings;
     // raw ADC measured data
     uint16_t vdac0_raw;
     uint16_t vref_raw;
@@ -62,12 +73,15 @@ typedef struct
 {
 	void (*loadInit)(void);
 	void (*setCurrent)(uint16_t val);
+	void (*setEnabled)(uint8_t state);
 	int16_t (*getEncoderOffset)(void);
 	void (*saveCalibrationData)(CalibrationData* cd);
+	void (*saveLoadSettings)(LoadSettings* ls);
 	void (*calcMeasuredParams)(void);
 	void (*setFanSpeed)(uint8_t fs);
 	void (*powerControl)(uint8_t is_on);
 	uint8_t (*checkOvertemperature)(void);
+	void (*checkPowerButton)(void);
 }LoadController;
 
 extern LoadController* load_control_drv;

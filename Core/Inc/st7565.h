@@ -82,6 +82,7 @@ typedef struct Window
 typedef struct
 {
 	void (*displayInit)(void);
+	void (*displayReset)(void);
 	void (*clearBuffer)(void);
 	void (*updateBuffer)(void);
 	void (*setBrightness)(uint8_t brightness);
@@ -98,6 +99,7 @@ typedef struct
 	void (*fillEllipse)(uint8_t Xpos, uint8_t Ypos, uint8_t XRadius, uint8_t YRadius);
 	void (*drawBatteryIndicator)(uint8_t xn, uint8_t yn, uint8_t percentage);
 	void (*drawFanIndicator)(uint8_t xn, uint8_t yn);
+	void (*drawOnOffButton)(uint8_t xn, uint8_t yn, uint8_t state);
 }ST7565_Drv;
 
 extern ST7565_Drv* st7565_drv;

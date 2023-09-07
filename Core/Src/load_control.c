@@ -5,31 +5,39 @@
  *      Author: Kuprin_IV
  */
 #include "load_control.h"
+#include "st7565.h"
 #include <string.h>
 
 // driver functions
 static void loadInit(void);
 static void setCurrent(uint16_t val);
+static void setEnabled(uint8_t state);
 static int16_t getEncoderOffset(void);
 static void saveCalibrationData(CalibrationData* cd);
+static void saveLoadSettings(LoadSettings* ls);
 static void calcMeasuredParams(void);
 static void setFanSpeed(uint8_t fs);
 static void powerControl(uint8_t is_on);
 static uint8_t checkOvertemperature(void);
+static void checkPowerButton(void);
 
 // inner functions
+static void setDacValue(uint16_t val);
 static float calcCurrent(uint16_t adc_val);
 static float calcVoltage(uint16_t adc_val);
 
 LoadController lc_driver = {
 		loadInit,
 		setCurrent,
+		setEnabled,
 		getEncoderOffset,
 		saveCalibrationData,
+		saveLoadSettings,
 		calcMeasuredParams,
 		setFanSpeed,
 		powerControl,
 		checkOvertemperature,
+		checkPowerButton
 };
 LoadController* load_control_drv =  &lc_driver;
 
@@ -42,8 +50,8 @@ static uint16_t encoder_cntr_prev = 32767;
 static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 
-Data loadData = {0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
-		SimpleLoad, 3.0f, 250, 0, 0, 0, 0, 0};
+Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
+				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 /**
   * @brief  Electronic load control initialization
@@ -55,7 +63,13 @@ static void loadInit(void)
 	// read calibration data, if it was saved
 	if((*(__IO uint32_t *)EEPROM_CAL_DATA_ADDR) != 0)
 	{
-		memcpy(&loadData.calibration_data, (uint32_t *)EEPROM_CAL_DATA_ADDR, sizeof(loadData.calibration_data));
+		memcpy(&loadData.calibration_data, (uint32_t *)EEPROM_CAL_DATA_ADDR, sizeof(CalibrationData));
+	}
+
+	// read load settings data, if it was saved
+	if((*(__IO uint32_t *)EEPROM_LOAD_SET_ADDR) != 0)
+	{
+		memcpy(&loadData.load_settings, (uint32_t *)EEPROM_LOAD_SET_ADDR, sizeof(LoadSettings));
 	}
 
 	// start DAC
@@ -74,7 +88,29 @@ static void loadInit(void)
   */
 static void setCurrent(uint16_t val)
 {
-	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
+	loadData.set_current_raw = val;
+	if(loadData.on_state)
+	{
+		setDacValue(val);
+	}
+}
+
+/**
+  * @brief  Electronic load set enabled state
+  * @param  state: 0 - disable, 1 - enable
+  * @retval none
+  */
+static void setEnabled(uint8_t state)
+{
+	loadData.on_state = state;
+	if(loadData.on_state)
+	{
+		setDacValue(loadData.set_current_raw);
+	}
+	else
+	{
+		setDacValue(0);
+	}
 }
 
 /**
@@ -119,6 +155,42 @@ static void saveCalibrationData(CalibrationData* cd)
 		for(uint8_t i = 0; i < num_of_words; i++)
 		{
 			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_CAL_DATA_ADDR+4*i, cd_ptr[i]);
+		}
+
+		if(flash_ok != HAL_OK)
+		{
+			Error_Handler();
+		}
+	}
+
+	HAL_FLASHEx_DATAEEPROM_Lock();
+}
+
+/**
+  * @brief  Save load settings data in EEPROM
+  * @param  ls - pointer to data structure with load settings data
+  * @retval none
+  */
+static void saveLoadSettings(LoadSettings* ls)
+{
+	HAL_StatusTypeDef flash_ok = HAL_ERROR;
+	uint8_t num_of_words = (sizeof(LoadSettings)>>2)+1;
+	uint32_t* ls_ptr = (uint32_t*)ls;
+
+	HAL_FLASHEx_DATAEEPROM_Unlock();
+
+	// erase EEPROM
+	for(uint8_t i = 0; i < num_of_words; i++)
+	{
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_SET_ADDR+4*i);
+	}
+
+	// save calibration coefficients
+	if(flash_ok == HAL_OK)
+	{
+		for(uint8_t i = 0; i < num_of_words; i++)
+		{
+			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_SET_ADDR+4*i, ls_ptr[i]);
 		}
 
 		if(flash_ok != HAL_OK)
@@ -195,6 +267,58 @@ static void powerControl(uint8_t is_on)
 static uint8_t checkOvertemperature(void)
 {
 	return (OVT_GPIO_Port->IDR & OVT_Pin) ? 1 : 0;
+}
+
+/**
+  * @brief  Check power button state
+  * @param  none
+  * @retval none
+  */
+static void checkPowerButton(void)
+{
+	static uint8_t tick_cntr;
+	static uint8_t button_prev_state;
+
+	if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && !button_prev_state) // button was pressed
+	{
+		button_prev_state = 1;
+		loadData.on_state ^= 0x01; // toggle load enabled state
+		setEnabled(loadData.on_state);
+	}
+	else if((PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && button_prev_state) // button was released
+	{
+		button_prev_state = 0;
+		tick_cntr = 0;
+	}
+	else if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && button_prev_state) // button is holding on
+	{
+		tick_cntr++;
+	}
+	// if button is holding more 1.5 sec, make power off
+	if(tick_cntr == POWER_OFF_TICKS)
+	{
+		setEnabled(0); // reset current
+		st7565_drv->displayReset(); // reset display
+		powerControl(0); // power off
+		HAL_PWR_EnterSTANDBYMode();
+	}
+}
+
+/**
+  * @brief  Write current value in discreets to DAC
+  * @param  val - current value in DAC discreets
+  * @retval none
+  */
+static void setDacValue(uint16_t val)
+{
+	if(loadData.load_settings.load_work_mode == Ramp)
+	{
+
+	}
+	else
+	{
+		HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
+	}
 }
 
 /**

@@ -20,6 +20,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
 static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action);
 static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action);
 static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Action value_action);
 
 // inner functions
 static float GetCurrentChangeStep(float current);
@@ -35,7 +36,7 @@ DisplayWndCtrl* display_wnd_ctrl = &drv;
 // private variables
 static Window MenuWnd;
 static Window DispMainWnd;
-static Window SetupWnds[4];
+static Window SetupWnds[5];
 static pWindow CurrentWnd = &DispMainWnd;
 static pWindow temp_wnd;
 static uint8_t level = 0;
@@ -64,6 +65,7 @@ static void windowsInit(void)
 	SetupWnds[1].callback = &SetupMaxPowerWindow;
 	SetupWnds[2].callback = &SetupCalibrationWindow;
 	SetupWnds[3].callback = &SetupBatteryWindow;
+	SetupWnds[4].callback = &SetupDisplayWindow;
 
 	CurrentWnd = &DispMainWnd;
 
@@ -94,6 +96,9 @@ static void goToNextWindowOrItem(void)
 		case 1:
 			if(menu_current_item == SETTINGS_ITEMS_NUM)
 			{
+				// save load setting in EEPROM
+				load_control_drv->saveLoadSettings(&loadData.load_settings);
+				// show main window
 				CurrentWnd = CurrentWnd->prev;
 				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
 				menu_current_item = 1;
@@ -176,9 +181,9 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
 {
     float max_current;
     float step = 0.01f;
+    uint8_t charge = 10*(data->vbat - VBAT_LOW)/(4.2f-VBAT_LOW);
 
-
-    max_current = (float)data->max_power/data->voltage;
+    max_current = (float)data->load_settings.max_power/data->voltage;
     if(max_current > 20.0f) max_current = 20.0f;
 
     // round max current value to nearest step value
@@ -220,7 +225,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     sprintf(wnd->strings[1].Text, "%d", data->rpm);
 
     wnd->strings[2].x_pos = 0;
-    wnd->strings[2].y_pos = 15;
+    wnd->strings[2].y_pos = 13;
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = MSSanSerif_14;
     wnd->strings[2].inverted = NotInverted;
@@ -234,51 +239,45 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     }
 
     wnd->strings[3].x_pos = 0;
-    wnd->strings[3].y_pos = 35;
+    wnd->strings[3].y_pos = 33;
     wnd->strings[3].align = AlignCenter;
     wnd->strings[3].font = font6x8;
     wnd->strings[3].inverted = NotInverted;
     sprintf(wnd->strings[3].Text, "%0.0f mAh  %0.1f Wh", data->mAh, data->Wh);
 
     wnd->strings[4].x_pos = 0;
-    wnd->strings[4].y_pos = 55;
+    wnd->strings[4].y_pos = 42;
     wnd->strings[4].align = AlignCenter;
     wnd->strings[4].font = font6x8;
-    wnd->strings[4].inverted = Inverted;
-    sprintf(wnd->strings[4].Text, "   Settings   ");
-
-    wnd->strings[5].x_pos = 0;
-    wnd->strings[5].y_pos = 44;
-    wnd->strings[5].align = AlignCenter;
-    wnd->strings[5].font = font6x8;
-    wnd->strings[5].inverted = NotInverted;
-    if(data->load_work_mode == BatteryDischarge)
+    wnd->strings[4].inverted = NotInverted;
+    if(data->load_settings.load_work_mode == BatteryDischarge)
     {
         if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.1fA", data->discharge_voltage, data->set_current);
+            sprintf(wnd->strings[4].Text, "Vdis:%0.2fV Iset:%0.1fA", data->load_settings.discharge_voltage, data->set_current);
         }
         else
         {
-            sprintf(wnd->strings[5].Text, "Vdis:%0.2fV Iset:%0.2fA", data->discharge_voltage, data->set_current);
+            sprintf(wnd->strings[4].Text, "Vdis:%0.2fV Iset:%0.2fA", data->load_settings.discharge_voltage, data->set_current);
         }
     }
     else
     {
         if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[5].Text, "Iset:%0.1fA", data->set_current);
+            sprintf(wnd->strings[4].Text, "Iset:%0.1fA", data->set_current);
         }
         else
         {
-            sprintf(wnd->strings[5].Text, "Iset:%0.2fA", data->set_current);
+            sprintf(wnd->strings[4].Text, "Iset:%0.2fA", data->set_current);
         }
     }
 
-    wnd->StringsQuantity = 6;
+    wnd->StringsQuantity = 5;
 
-    st7565_drv->drawBatteryIndicator(105, 1, 8);
+    st7565_drv->drawBatteryIndicator(105, 1, charge);
     st7565_drv->drawFanIndicator(56, 0);
+    st7565_drv->drawOnOffButton(51, 52, data->on_state);
 
     st7565_drv->setWindow(wnd);
     return 0;
@@ -293,7 +292,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
   */
 static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action)
 {
-    const char* items[SETTINGS_ITEMS_NUM]  = {"Mode\0","Max power\0","Calibration\0","Battery\0","Quit\0"};
+    const char* items[SETTINGS_ITEMS_NUM]  = {"Mode\0","Max power\0","Calibration\0","Battery\0","Display\0","Quit\0"};
     uint8_t items_num = SETTINGS_ITEMS_NUM;
     int max_item_per_screen = 6;
 
@@ -357,12 +356,15 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
   */
 static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* modes[2]  = {"Simple\0","Discharge\0"};
-    int mode_items_num = data->load_work_mode == BatteryDischarge ? 3 : 2;
+    const char* modes[3]  = {"Simple\0","Discharge\0","Ramp up\0"};
+    uint16_t ramp_lengths[6] = {10, 20, 50, 100, 200, 500};
+    uint8_t mode_cntr = 0;
+    uint8_t ramps_cntr = 0;
+    int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
     float step = 0.05f;
 
-    if(data->discharge_voltage < 5.0f) step = 0.05f;
-    else if(data->discharge_voltage < 20.0f) step = 0.1f;
+    if(data->load_settings.discharge_voltage < 5.0f) step = 0.05f;
+    else if(data->load_settings.discharge_voltage < 20.0f) step = 0.1f;
     else step = 0.5f;
 
     switch(item_action)
@@ -390,24 +392,54 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         case Next:
             if(mode_current_item == 1)
             {
-                data->load_work_mode = (LoadMode)((data->load_work_mode + 1) & 0x01);
+                if(++mode_cntr > 2)
+                {
+                	mode_cntr = 0;
+                }
+                data->load_settings.load_work_mode = (LoadMode)mode_cntr;
             }
             else if(mode_current_item == 2)
             {
-                if(data->discharge_voltage < 50.0f) data->discharge_voltage += step;
-                else data->discharge_voltage = 50.0f;
+            	if(data->load_settings.load_work_mode == BatteryDischarge)
+            	{
+					if(data->load_settings.discharge_voltage < 50.0f) data->load_settings.discharge_voltage += step;
+					else data->load_settings.discharge_voltage = 50.0f;
+            	}
+            	else if(data->load_settings.load_work_mode == Ramp)
+            	{
+                    if(++ramps_cntr >= sizeof(ramp_lengths)/2)
+                    {
+                    	ramps_cntr = 0;
+                    }
+                    data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
+            	}
             }
             break;
 
         case Prev:
             if(mode_current_item == 1)
             {
-                data->load_work_mode = (LoadMode)((data->load_work_mode - 1) & 0x01);
+                if(--mode_cntr > 2)
+                {
+                	mode_cntr = 2;
+                }
+                data->load_settings.load_work_mode = (LoadMode)mode_cntr;
             }
             else if(mode_current_item == 2)
             {
-                if(data->discharge_voltage > 0.05f) data->discharge_voltage -= step;
-                else data->discharge_voltage = 0.0f;
+            	if(data->load_settings.load_work_mode == BatteryDischarge)
+            	{
+					if(data->load_settings.discharge_voltage > 0.05f) data->load_settings.discharge_voltage -= step;
+					else data->load_settings.discharge_voltage = 0.0f;
+            	}
+            	else if(data->load_settings.load_work_mode == Ramp)
+            	{
+                    if(--ramps_cntr >= sizeof(ramp_lengths)/2)
+                    {
+                    	ramps_cntr = sizeof(ramp_lengths)/2-1;
+                    }
+                    data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
+            	}
             }
             break;
     }
@@ -424,9 +456,9 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
     wnd->strings[1].align = AlignCenter;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = mode_current_item == 1 ? Inverted : NotInverted;
-    sprintf(wnd->strings[1].Text, "%s", modes[data->load_work_mode]);
+    sprintf(wnd->strings[1].Text, "%s", modes[data->load_settings.load_work_mode]);
 
-    if(data->load_work_mode == BatteryDischarge)
+    if(data->load_settings.load_work_mode == BatteryDischarge)
     {
         wnd->strings[2].x_pos = 10;
         wnd->strings[2].y_pos = 15;
@@ -440,8 +472,33 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
-        sprintf(wnd->strings[3].Text, "%0.2f V", data->discharge_voltage);
+        sprintf(wnd->strings[3].Text, "%0.2f V", data->load_settings.discharge_voltage);
 
+
+        wnd->strings[4].x_pos = 0;
+        wnd->strings[4].y_pos = 55;
+        wnd->strings[4].align = AlignCenter;
+        wnd->strings[4].font = font6x8;
+        wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
+        sprintf(wnd->strings[4].Text, "  < Back    ");
+
+        wnd->StringsQuantity = 5;
+    }
+    else if(data->load_settings.load_work_mode == Ramp)
+    {
+        wnd->strings[2].x_pos = 10;
+        wnd->strings[2].y_pos = 15;
+        wnd->strings[2].align = AlignLeft;
+        wnd->strings[2].font = font6x8;
+        wnd->strings[2].inverted = NotInverted;
+        sprintf(wnd->strings[2].Text, "Ramp:");
+
+        wnd->strings[3].x_pos = 50;
+        wnd->strings[3].y_pos = 15;
+        wnd->strings[3].align = AlignCenter;
+        wnd->strings[3].font = font6x8;
+        wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
+        sprintf(wnd->strings[3].Text, "%d ms", data->load_settings.current_ramp_time);
 
         wnd->strings[4].x_pos = 0;
         wnd->strings[4].y_pos = 55;
@@ -464,9 +521,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->StringsQuantity = 3;
     }
 
-
     st7565_drv->setWindow(wnd);
-
     return 1;
 }
 
@@ -503,21 +558,21 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
             break;
 
         case Prev:
-            if(data->max_power > 10) data->max_power--;
-            else data->max_power = 10;
+            if(data->load_settings.max_power > 10) data->load_settings.max_power--;
+            else data->load_settings.max_power = 10;
             break;
 
         case Next:
-            if(data->max_power < 250) data->max_power++;
-            else data->max_power = 250;
+            if(data->load_settings.max_power < 250) data->load_settings.max_power++;
+            else data->load_settings.max_power = 250;
             break;
     }
 
-    if(data->max_power >= 100)
+    if(data->load_settings.max_power >= 100)
     {
         index = 2;
     }
-    else if(data->max_power >= 10)
+    else if(data->load_settings.max_power >= 10)
     {
         index = 1;
     }
@@ -526,9 +581,9 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
         index = 0;
     }
 
-    if(data->set_current > (float)data->max_power/data->voltage+0.01f)
+    if(data->set_current > (float)data->load_settings.max_power/data->voltage+0.01f)
     {
-        data->set_current = (float)data->max_power/data->voltage;
+        data->set_current = (float)data->load_settings.max_power/data->voltage;
         // round current value to nearest step value
         step = GetCurrentChangeStep(data->set_current);
         steps_num = (int)(data->set_current/step);
@@ -547,7 +602,7 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
     wnd->strings[1].align = AlignLeft;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = Inverted;
-    sprintf(wnd->strings[1].Text, "%d", data->max_power);
+    sprintf(wnd->strings[1].Text, "%d", data->load_settings.max_power);
 
     wnd->strings[2].x_pos = 0;
     wnd->strings[2].y_pos = 55;
@@ -576,6 +631,9 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
     int calibration_items_num = 7;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
 
+    // enable load
+    load_control_drv->setEnabled(1);
+
     switch(item_action)
     {
         case NoAction:
@@ -593,6 +651,9 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             if(++calibration_current_item > calibration_items_num)
             {
                 calibration_current_item = 1;
+                // disable load
+                load_control_drv->setEnabled(0);
+                // save calibration data
                 load_control_drv->saveCalibrationData(&data->calibration_data);
                 return 0;
             }
@@ -662,7 +723,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = NotInverted;
-//        calibration_data_ptr[data->calibration_current_item + 2] = data->measured_current_raw;
+//        calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw;
         sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
         wnd->strings[5].x_pos = 0;
@@ -710,7 +771,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[2].align = AlignCenter;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
-//            calibration_data_ptr[dcalibration_current_item + 2] = data->voltage_raw;
+//            calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw;
             sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
             wnd->strings[3].x_pos = 0;
@@ -764,6 +825,71 @@ static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Actio
     sprintf(wnd->strings[1].Text, "   Ok   ");
 
     wnd->StringsQuantity = 2;
+
+    st7565_drv->setWindow(wnd);
+    return 1;
+}
+
+/**
+  * @brief  Callback function for drawing display settings window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
+static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+{
+    switch(item_action)
+    {
+        case NoAction:
+        case Prev:
+        default:
+            break;
+
+        case Next:
+            return 0;
+            break;
+    }
+
+    switch(value_action)
+    {
+        case NoAction:
+        default:
+            break;
+
+        case Prev:
+            if(data->load_settings.display_contrast > 0) data->load_settings.display_contrast--;
+            else data->load_settings.display_contrast = 0;
+            break;
+
+        case Next:
+            if(data->load_settings.display_contrast < 32) data->load_settings.display_contrast++;
+            else data->load_settings.display_contrast = 32;
+            break;
+    }
+
+    wnd->strings[0].x_pos = 15;
+    wnd->strings[0].y_pos = 25;
+    wnd->strings[0].align = AlignLeft;
+    wnd->strings[0].font = font6x8;
+    wnd->strings[0].inverted = NotInverted;
+    sprintf(wnd->strings[0].Text, "Contrast:");
+
+    wnd->strings[1].x_pos = 80;
+    wnd->strings[1].y_pos = 25;
+    wnd->strings[1].align = AlignLeft;
+    wnd->strings[1].font = font6x8;
+    wnd->strings[1].inverted = Inverted;
+    sprintf(wnd->strings[1].Text, "%d", data->load_settings.display_contrast);
+
+    wnd->strings[2].x_pos = 0;
+    wnd->strings[2].y_pos = 55;
+    wnd->strings[2].align = AlignCenter;
+    wnd->strings[2].font = font6x8;
+    wnd->strings[2].inverted = Inverted;
+    sprintf(wnd->strings[2].Text, "   Ok   ");
+
+    wnd->StringsQuantity = 3;
 
     st7565_drv->setWindow(wnd);
     return 1;

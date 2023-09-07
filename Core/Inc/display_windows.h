@@ -13,7 +13,7 @@
 #include "st7565.h"
 #include <string.h>
 
-#define SETTINGS_ITEMS_NUM          5
+#define SETTINGS_ITEMS_NUM          6
 
 typedef struct
 {

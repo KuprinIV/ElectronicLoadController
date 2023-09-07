@@ -112,6 +112,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  // wait power on
+  HAL_Delay(1000);
+  load_control_drv->powerControl(1);
+  // continue initialization
   MX_DMA_Init();
   MX_DAC_Init();
   MX_TIM2_Init();
@@ -143,6 +147,9 @@ int main(void)
 	  {
 		  loadData.is_update_event = 0;
 
+		  // check power button state
+		  load_control_drv->checkPowerButton();
+
 		  // handle encoder button pressed event
 		  if((EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && ec_btn_prev_state) // button was released
 		  {
@@ -161,6 +168,12 @@ int main(void)
 		  {
 				encoder_offset_action = (encoder_offset > 0) ? Next : Prev;
 				display_wnd_ctrl->updateWindowParameters(encoder_offset_action);
+		  }
+
+		  // check accumulator voltage in Discharge mode
+		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage)
+		  {
+			  // if accumulator voltage lower discharge voltage level, reset current
 		  }
 	  }
 
