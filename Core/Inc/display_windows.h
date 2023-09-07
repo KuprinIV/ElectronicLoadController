@@ -15,11 +15,14 @@
 
 #define SETTINGS_ITEMS_NUM          5
 
-int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action);
-int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action);
-int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action);
-int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action);
-int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action);
-int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+typedef struct
+{
+	void (*windowsInit)(void);
+	void (*goToNextWindowOrItem)(void);
+	void (*updateWindowParameters)(Action encoder_offset_action);
+	void (*refreshWindow)(void);
+}DisplayWndCtrl;
+
+extern DisplayWndCtrl* display_wnd_ctrl;
 
 #endif /* INC_DISPLAY_WINDOWS_H_ */

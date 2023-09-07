@@ -7,7 +7,163 @@
 #include "load_control.h"
 #include <stdio.h>
 
+// driver functions
+static void windowsInit(void);
+static void goToNextWindowOrItem(void);
+static void updateWindowParameters(Action encoder_offset_action);
+static void refreshWindow(void);
+
+// callbacks
+static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action);
+static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+
+// inner functions
 static float GetCurrentChangeStep(float current);
+
+DisplayWndCtrl drv = {
+		windowsInit,
+		goToNextWindowOrItem,
+		updateWindowParameters,
+		refreshWindow,
+};
+DisplayWndCtrl* display_wnd_ctrl = &drv;
+
+// private variables
+static Window MenuWnd;
+static Window DispMainWnd;
+static Window SetupWnds[4];
+static pWindow CurrentWnd = &DispMainWnd;
+static pWindow temp_wnd;
+static uint8_t level = 0;
+
+extern Data loadData;
+
+static uint32_t mode_current_item = 1;
+static uint32_t calibration_current_item = 1;
+static uint32_t menu_current_item = 1;
+
+/**
+  * @brief  Initialize interface windows
+  * @param  none
+  * @retval none
+  */
+static void windowsInit(void)
+{
+	// init display
+	st7565_drv->displayInit();
+
+	// init windows
+	DispMainWnd.callback = &DisplayMainWindow;
+	MenuWnd.callback = &SetMenuWindow;
+
+	SetupWnds[0].callback = &SetupModeWindow;
+	SetupWnds[1].callback = &SetupMaxPowerWindow;
+	SetupWnds[2].callback = &SetupCalibrationWindow;
+	SetupWnds[3].callback = &SetupBatteryWindow;
+
+	CurrentWnd = &DispMainWnd;
+
+	// draw main window
+	refreshWindow();
+}
+
+/**
+  * @brief  Change window or go to the next window item
+  * @param  none
+  * @retval none
+  */
+static void goToNextWindowOrItem(void)
+{
+	// clear display buffer data
+	st7565_drv->clearBuffer();
+
+	switch(level)
+	{
+		case 0:
+			temp_wnd = CurrentWnd;
+			CurrentWnd = &MenuWnd;
+			CurrentWnd->prev = temp_wnd;
+			CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+			level++;
+			break;
+
+		case 1:
+			if(menu_current_item == SETTINGS_ITEMS_NUM)
+			{
+				CurrentWnd = CurrentWnd->prev;
+				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+				menu_current_item = 1;
+				level--;
+			}
+			else
+			{
+				temp_wnd = CurrentWnd;
+				CurrentWnd = &(SetupWnds[menu_current_item-1]);
+				CurrentWnd->prev = temp_wnd;
+				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+				level++;
+			}
+			break;
+
+		case 2:
+			if(CurrentWnd->callback(CurrentWnd,&loadData,Next,NoAction) == 0)
+			{
+				level--;
+				CurrentWnd = CurrentWnd->prev;
+				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+			}
+			break;
+	}
+
+	// update display
+	st7565_drv->updateBuffer();
+}
+
+/**
+  * @brief  Update window item parameter
+  * @param  encoder_offset_action: NoAction - do nothing, Next - increase parameter value or go to the next item, Prev -
+  * decrease parameter value or go to the previous item
+  * @retval none
+  */
+static void updateWindowParameters(Action encoder_offset_action)
+{
+	// clear display buffer data
+	st7565_drv->clearBuffer();
+
+	switch(level)
+	{
+		case 0:
+			CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+			break;
+
+		case 1:
+			CurrentWnd->callback(CurrentWnd,&loadData,encoder_offset_action,NoAction);
+			break;
+
+		case 2:
+			CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
+			break;
+	}
+
+	// update display
+	st7565_drv->updateBuffer();
+}
+
+/**
+  * @brief  Refresh window
+  * @param  none
+  * @retval none
+  */
+static void refreshWindow(void)
+{
+	st7565_drv->clearBuffer();
+	CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
+	st7565_drv->updateBuffer();
+}
 
 /**
   * @brief  Callback function for drawing main window
@@ -16,7 +172,7 @@ static float GetCurrentChangeStep(float current);
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     float max_current;
     float step = 0.01f;
@@ -135,7 +291,7 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action)
+static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action)
 {
     const char* items[SETTINGS_ITEMS_NUM]  = {"Mode\0","Max power\0","Calibration\0","Battery\0","Quit\0"};
     uint8_t items_num = SETTINGS_ITEMS_NUM;
@@ -150,21 +306,21 @@ int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_actio
             break;
 
         case Next:
-            if(++data->menu_current_item > items_num)
+            if(++menu_current_item > items_num)
             {
-                data->menu_current_item = 1;
+                menu_current_item = 1;
             }
             break;
 
         case Prev:
-            if(--data->menu_current_item < 1)
+            if(--menu_current_item < 1)
             {
-                data->menu_current_item = items_num;
+                menu_current_item = items_num;
             }
             break;
     }
 
-    if(data->menu_current_item <= max_item_per_screen)
+    if(menu_current_item <= max_item_per_screen)
     {
         for(uint8_t i = 0; i < (items_num <= max_item_per_screen ? items_num : max_item_per_screen); i++)
         {
@@ -172,7 +328,7 @@ int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_actio
             wnd->strings[i].y_pos = 2+10*i;
             wnd->strings[i].align = AlignLeft;
             wnd->strings[i].font = font6x8;
-            wnd->strings[i].inverted = (i == data->menu_current_item-1)?(Inverted):(NotInverted);
+            wnd->strings[i].inverted = (i == menu_current_item-1)?(Inverted):(NotInverted);
             sprintf(wnd->strings[i].Text, "%s", items[i]);
         }
     }
@@ -185,7 +341,7 @@ int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_actio
             wnd->strings[i].align = AlignLeft;
             wnd->strings[i].font = font6x8;
             wnd->strings[i].inverted = (i == max_item_per_screen-1)?(Inverted):(NotInverted);
-            sprintf(wnd->strings[i].Text, "%s", items[data->menu_current_item-max_item_per_screen+i]);
+            sprintf(wnd->strings[i].Text, "%s", items[menu_current_item-max_item_per_screen+i]);
         }
     }
     st7565_drv->setWindow(wnd);
@@ -199,7 +355,7 @@ int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_actio
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Simple\0","Discharge\0"};
     int mode_items_num = data->load_work_mode == BatteryDischarge ? 3 : 2;
@@ -217,9 +373,9 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
             break;
 
         case Next:
-            if(++data->mode_current_item > mode_items_num)
+            if(++mode_current_item > mode_items_num)
             {
-                data->mode_current_item = 1;
+                mode_current_item = 1;
                 return 0;
             }
             break;
@@ -232,11 +388,11 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
             break;
 
         case Next:
-            if(data->mode_current_item == 1)
+            if(mode_current_item == 1)
             {
                 data->load_work_mode = (LoadMode)((data->load_work_mode + 1) & 0x01);
             }
-            else if(data->mode_current_item == 2)
+            else if(mode_current_item == 2)
             {
                 if(data->discharge_voltage < 50.0f) data->discharge_voltage += step;
                 else data->discharge_voltage = 50.0f;
@@ -244,11 +400,11 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
             break;
 
         case Prev:
-            if(data->mode_current_item == 1)
+            if(mode_current_item == 1)
             {
                 data->load_work_mode = (LoadMode)((data->load_work_mode - 1) & 0x01);
             }
-            else if(data->mode_current_item == 2)
+            else if(mode_current_item == 2)
             {
                 if(data->discharge_voltage > 0.05f) data->discharge_voltage -= step;
                 else data->discharge_voltage = 0.0f;
@@ -267,7 +423,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
     wnd->strings[1].y_pos = 5;
     wnd->strings[1].align = AlignCenter;
     wnd->strings[1].font = font6x8;
-    wnd->strings[1].inverted = data->mode_current_item == 1 ? Inverted : NotInverted;
+    wnd->strings[1].inverted = mode_current_item == 1 ? Inverted : NotInverted;
     sprintf(wnd->strings[1].Text, "%s", modes[data->load_work_mode]);
 
     if(data->load_work_mode == BatteryDischarge)
@@ -283,7 +439,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
         wnd->strings[3].y_pos = 15;
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
-        wnd->strings[3].inverted = data->mode_current_item == 2 ? Inverted : NotInverted;
+        wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
         sprintf(wnd->strings[3].Text, "%0.2f V", data->discharge_voltage);
 
 
@@ -291,7 +447,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
         wnd->strings[4].y_pos = 55;
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
-        wnd->strings[4].inverted = data->mode_current_item == mode_items_num ? Inverted : NotInverted;
+        wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
         sprintf(wnd->strings[4].Text, "  < Back    ");
 
         wnd->StringsQuantity = 5;
@@ -302,7 +458,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
         wnd->strings[2].y_pos = 55;
         wnd->strings[2].align = AlignCenter;
         wnd->strings[2].font = font6x8;
-        wnd->strings[2].inverted = data->mode_current_item == mode_items_num ? Inverted : NotInverted;
+        wnd->strings[2].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
         sprintf(wnd->strings[2].Text, "  < Back    ");
 
         wnd->StringsQuantity = 3;
@@ -321,7 +477,7 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* max_power_space[3] = {" \0", "  \0", "   \0"};
     int index = 2;
@@ -413,7 +569,7 @@ int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action valu
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Current\0","Voltage\0"};
     const char* refs[6] = {"0,1A", "1A", " 5A", "1V", "10V", "25V"};
@@ -423,9 +579,9 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
     switch(item_action)
     {
         case NoAction:
-            if(data->calibration_current_item < 4)
+            if(calibration_current_item < 4)
             {
-                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
+                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
             }
         	break;
 
@@ -434,15 +590,15 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             break;
 
         case Next:
-            if(++data->calibration_current_item > calibration_items_num)
+            if(++calibration_current_item > calibration_items_num)
             {
-                data->calibration_current_item = 1;
+                calibration_current_item = 1;
                 load_control_drv->saveCalibrationData(&data->calibration_data);
                 return 0;
             }
-            else if(data->calibration_current_item < 4)
+            else if(calibration_current_item < 4)
             {
-                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
+                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
     }
@@ -454,18 +610,18 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
             break;
 
         case Next:
-            if(data->calibration_current_item < 4)
+            if(calibration_current_item < 4)
             {
-                calibration_data_ptr[data->calibration_current_item - 1]++;
-                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
+                calibration_data_ptr[calibration_current_item - 1]++;
+                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
 
         case Prev:
-            if(data->calibration_current_item < 4)
+            if(calibration_current_item < 4)
             {
-                calibration_data_ptr[data->calibration_current_item - 1]--;
-                load_control_drv->setCurrent(calibration_data_ptr[data->calibration_current_item - 1]);
+                calibration_data_ptr[calibration_current_item - 1]--;
+                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
     }
@@ -476,16 +632,16 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
 
-    if(data->calibration_current_item < 4)
+    if(calibration_current_item < 4)
     {
-        sprintf(wnd->strings[0].Text, "%s calibration", modes[(data->calibration_current_item-1)>>2]);
+        sprintf(wnd->strings[0].Text, "%s calibration", modes[(calibration_current_item-1)>>2]);
 
         wnd->strings[1].x_pos = 0;
         wnd->strings[1].y_pos = 18;
         wnd->strings[1].align = AlignCenter;
         wnd->strings[1].font = font6x8;
         wnd->strings[1].inverted = NotInverted;
-        sprintf(wnd->strings[1].Text, "Set current %s", refs[data->calibration_current_item-1]);
+        sprintf(wnd->strings[1].Text, "Set current %s", refs[calibration_current_item-1]);
 
         wnd->strings[2].x_pos = 40;
 		wnd->strings[2].y_pos = 28;
@@ -499,7 +655,7 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = Inverted;
-        sprintf(wnd->strings[3].Text, "%d", calibration_data_ptr[data->calibration_current_item - 1]);
+        sprintf(wnd->strings[3].Text, "%d", calibration_data_ptr[calibration_current_item - 1]);
 
         wnd->strings[4].x_pos = 0;
         wnd->strings[4].y_pos = 38;
@@ -507,7 +663,7 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = NotInverted;
 //        calibration_data_ptr[data->calibration_current_item + 2] = data->measured_current_raw;
-        sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[data->calibration_current_item + 2]);
+        sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
         wnd->strings[5].x_pos = 0;
 		wnd->strings[5].y_pos = 55;
@@ -520,7 +676,7 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
     }
     else
     {
-        if(data->calibration_current_item == calibration_items_num)
+        if(calibration_current_item == calibration_items_num)
         {
             wnd->strings[1].x_pos = 0;
             wnd->strings[1].y_pos = 25;
@@ -540,22 +696,22 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
         }
         else
         {
-            sprintf(wnd->strings[0].Text, "%s calibration", modes[data->calibration_current_item>>2]);
+            sprintf(wnd->strings[0].Text, "%s calibration", modes[calibration_current_item>>2]);
 
             wnd->strings[1].x_pos = 0;
             wnd->strings[1].y_pos = 18;
             wnd->strings[1].align = AlignCenter;
             wnd->strings[1].font = font6x8;
             wnd->strings[1].inverted = NotInverted;
-            sprintf(wnd->strings[1].Text, "Set voltage %s", refs[data->calibration_current_item-1]);
+            sprintf(wnd->strings[1].Text, "Set voltage %s", refs[calibration_current_item-1]);
 
             wnd->strings[2].x_pos = 0;
             wnd->strings[2].y_pos = 28;
             wnd->strings[2].align = AlignCenter;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
-//            calibration_data_ptr[data->calibration_current_item + 2] = data->voltage_raw;
-            sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[data->calibration_current_item + 2]);
+//            calibration_data_ptr[dcalibration_current_item + 2] = data->voltage_raw;
+            sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
             wnd->strings[3].x_pos = 0;
             wnd->strings[3].y_pos = 55;
@@ -579,7 +735,7 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
   * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
   * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
   */
-int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action)
+static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     switch(item_action)
     {
@@ -614,7 +770,7 @@ int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value
 }
 
 /**
-  * @brief  This function returns current step of changing setting current
+  * @brief  This function returns change step of setting current
   * @param  current - setting current value
   * @retval step - step value for the given current
   */

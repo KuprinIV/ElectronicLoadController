@@ -22,7 +22,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "st7565.h"
 #include "display_windows.h"
 /* USER CODE END Includes */
 
@@ -59,11 +58,6 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 TIM_HandleTypeDef htim22;
 
-Window MenuWnd;
-Window DispMainWnd;
-Window SetupWnds[4];
-pWindow CurrentWnd = &DispMainWnd;
-
 extern Data loadData;
 /* USER CODE END PV */
 
@@ -95,8 +89,6 @@ static void MX_TIM22_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	pWindow temp_wnd;
-	uint8_t level = 0;
 	uint8_t ec_btn_prev_state = 0;
 	Action encoder_offset_action = NoAction;
 	int16_t encoder_offset = 0;
@@ -132,27 +124,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   MX_TIM22_Init();
 
-  // init display
-  st7565_drv->displayInit();
-
   // init load control
   load_control_drv->loadInit();
 
-  // init windows
-  DispMainWnd.callback = &DisplayMainWindow;
-  MenuWnd.callback = &SetMenuWindow;
+  // init display windows and draw main window
+  display_wnd_ctrl->windowsInit();
 
-  SetupWnds[0].callback = &SetupModeWindow;
-  SetupWnds[1].callback = &SetupMaxPowerWindow;
-  SetupWnds[2].callback = &SetupCalibrationWindow;
-  SetupWnds[3].callback = &SetupBatteryWindow;
-
-  CurrentWnd = &DispMainWnd;
-
-  // draw main window
-  st7565_drv->clearBuffer();
-  CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
-  st7565_drv->updateBuffer();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -169,51 +146,13 @@ int main(void)
 		  // handle encoder button pressed event
 		  if((EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && ec_btn_prev_state) // button was released
 		  {
-			  ec_btn_prev_state = 0;
+			    ec_btn_prev_state = 0;
 		  }
 		  if(!(EC_BTN_GPIO_Port->IDR & EC_BTN_Pin) && !ec_btn_prev_state) // button was pressed
 		  {
 				ec_btn_prev_state = 1;
-				// clear display buffer data
-				st7565_drv->clearBuffer();
-
-				switch(level)
-				{
-					case 0:
-						temp_wnd = CurrentWnd;
-						CurrentWnd = &MenuWnd;
-						CurrentWnd->prev = temp_wnd;
-						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-						level++;
-						break;
-
-					case 1:
-						if(loadData.menu_current_item == SETTINGS_ITEMS_NUM)
-						{
-							CurrentWnd = CurrentWnd->prev;
-							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-							loadData.menu_current_item = 1;
-							level--;
-						}
-						else
-						{
-							temp_wnd = CurrentWnd;
-							CurrentWnd = &(SetupWnds[loadData.menu_current_item-1]);
-							CurrentWnd->prev = temp_wnd;
-							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-							level++;
-						}
-						break;
-
-					case 2:
-						if(CurrentWnd->callback(CurrentWnd,&loadData,Next,NoAction) == 0)
-						{
-							level--;
-							CurrentWnd = CurrentWnd->prev;
-							CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-						}
-						break;
-				}
+				// change window
+				display_wnd_ctrl->goToNextWindowOrItem();
 		  }
 
 		  // handle encoder offset event
@@ -221,39 +160,18 @@ int main(void)
 		  if(encoder_offset != 0)
 		  {
 				encoder_offset_action = (encoder_offset > 0) ? Next : Prev;
-				// clear display buffer data
-				st7565_drv->clearBuffer();
-
-				switch(level)
-				{
-					case 0:
-						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
-						break;
-
-					case 1:
-						CurrentWnd->callback(CurrentWnd,&loadData,encoder_offset_action,NoAction);
-						break;
-
-					case 2:
-						CurrentWnd->callback(CurrentWnd,&loadData,NoAction,encoder_offset_action);
-						break;
-				}
+				display_wnd_ctrl->updateWindowParameters(encoder_offset_action);
 		  }
-
-		  // update display data
-		  st7565_drv->updateBuffer();
 	  }
 
 	  // handle end of ADC data conversion event
 	  if(loadData.is_conversion_ended)
 	  {
 		  loadData.is_conversion_ended = 0;
-		  // update ADC measured params
+		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
 		  // update display data
-		  st7565_drv->clearBuffer();
-		  CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
-		  st7565_drv->updateBuffer();
+		  display_wnd_ctrl->refreshWindow();
 	  }
   }
   /* USER CODE END 3 */

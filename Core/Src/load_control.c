@@ -14,6 +14,8 @@ static int16_t getEncoderOffset(void);
 static void saveCalibrationData(CalibrationData* cd);
 static void calcMeasuredParams(void);
 static void setFanSpeed(uint8_t fs);
+static void powerControl(uint8_t is_on);
+static uint8_t checkOvertemperature(void);
 
 // inner functions
 static float calcCurrent(uint16_t adc_val);
@@ -26,6 +28,8 @@ LoadController lc_driver = {
 		saveCalibrationData,
 		calcMeasuredParams,
 		setFanSpeed,
+		powerControl,
+		checkOvertemperature,
 };
 LoadController* load_control_drv =  &lc_driver;
 
@@ -38,8 +42,8 @@ static uint16_t encoder_cntr_prev = 32767;
 static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 
-Data loadData = {0, 0, 0.0f, 0.1f, 0.0f, 0.0f, 0.0f, 20.0f, 0, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
-		0, 4.2f, 250, 0, 0, 0, 0, 0};
+Data loadData = {0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
+		SimpleLoad, 3.0f, 250, 0, 0, 0, 0, 0};
 
 /**
   * @brief  Electronic load control initialization
@@ -145,8 +149,8 @@ static void calcMeasuredParams(void)
 	}
 	// convert them
 	loadData.vbat = 2*adc_averaged_data[0]*3.3f/4096;
-	loadData.vdac0 = adc_averaged_data[1];
-	loadData.vref = adc_averaged_data[2];
+	loadData.vdac0_raw = adc_averaged_data[1];
+	loadData.vref_raw = adc_averaged_data[2];
 	loadData.measured_current_raw = adc_averaged_data[3];
 	loadData.voltage_raw = (adc_averaged_data[4]);
 
@@ -170,6 +174,27 @@ static void setFanSpeed(uint8_t fs)
 {
 	if(fs > 99) fs = 99;
 	TIM21->CCR2 = fs;
+}
+
+/**
+  * @brief  Electronic load power control
+  * @param  is_on: 0 power off, 1 - power on
+  * @retval none
+  */
+static void powerControl(uint8_t is_on)
+{
+	__IO uint32_t* reg = is_on ? &PWR_ON_GPIO_Port->BSRR : &PWR_ON_GPIO_Port->BRR;
+	*reg = PWR_ON_Pin;
+}
+
+/**
+  * @brief  Check overtemperature event
+  * @param  none
+  * @retval 0 - no overtemperature, 1 - overtemperature
+  */
+static uint8_t checkOvertemperature(void)
+{
+	return (OVT_GPIO_Port->IDR & OVT_Pin) ? 1 : 0;
 }
 
 /**
@@ -332,7 +357,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			loadData.rpm = 0;
 		}
 	}
-	else if(htim->Instance == TIM22)
+	if(htim->Instance == TIM22)
 	{
 		loadData.is_update_event = 1;
 	}

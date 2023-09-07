@@ -31,30 +31,31 @@ typedef struct
 
 typedef struct
 {
+	// flags
 	volatile uint8_t is_update_event;
 	volatile uint8_t is_conversion_ended;
+	uint8_t is_ovt;
+	// set and measured parameters
+	float set_current;
     float measured_current;
-    float set_current;
     float voltage;
     float mAh;
     float Wh;
     float temperature;
-    int rpm;
-    int menu_current_item;
+    float vbat;
+    uint16_t rpm;
+    // calibration data
+    CalibrationData calibration_data;
+    // settings
     LoadMode load_work_mode;
     float discharge_voltage;
-    int mode_current_item;
-    int calibration_current_item;
-    CalibrationData calibration_data;
-    uint8_t is_ovt;
-    float vbat;
-    int max_power;
-    uint16_t vdac0;
-    uint16_t vref;
+    uint16_t max_power;
+    // raw ADC measured data
+    uint16_t vdac0_raw;
+    uint16_t vref_raw;
     uint16_t measured_current_raw;
     uint16_t set_current_raw;
     uint16_t voltage_raw;
-
 }Data,*pData;
 
 typedef struct
@@ -65,6 +66,8 @@ typedef struct
 	void (*saveCalibrationData)(CalibrationData* cd);
 	void (*calcMeasuredParams)(void);
 	void (*setFanSpeed)(uint8_t fs);
+	void (*powerControl)(uint8_t is_on);
+	uint8_t (*checkOvertemperature)(void);
 }LoadController;
 
 extern LoadController* load_control_drv;
