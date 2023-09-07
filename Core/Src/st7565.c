@@ -58,18 +58,38 @@ ST7565_Drv* st7565_drv = &st7565_driver;
 
 uint8_t lcd_framebuffer[LCDWIDTH*LCDHEIGHT/8] = {0};
 
+/**
+  * @brief  Write command to ST7565 display
+  * @param  cmd - command byte
+  * @retval none
+  */
 static void ST7565_writeCommand(uint8_t cmd)
 {
 	CD_GPIO_Port->BRR = CD_Pin; // command mode
 	HAL_SPI_Transmit(&hspi1, &cmd, 1, 1000);
 }
 
+/**
+  * @brief  Write data to ST7565 display
+  * @param  data - framebuffer data array
+  * @param  length - framebuffer length
+  * @retval none
+  */
 static void ST7565_writeData(uint8_t* data, uint16_t length)
 {
 	CD_GPIO_Port->BSRR = CD_Pin; // data mode
 	HAL_SPI_Transmit(&hspi1, data, length, 1000);
 }
 
+/**
+  * @brief  Write bitmap data to framebuffer
+  * @param  bmp - bitmap data array
+  * @param  x - x-coordinate of top-left corner
+  * @param  y - y-coordinate of top-left corner
+  * @param  width - bitmap width in pixels
+  * @param  height - bitmap height in pixels
+  * @retval none
+  */
 static void ST7565_drawBitmap(uint8_t* bmp, uint8_t x, uint8_t y, uint8_t width, uint8_t height)
 {
     uint8_t bytes_in_col = ((height%8) == 0)?(height>>3):((height>>3) + 1);
@@ -90,6 +110,11 @@ static void ST7565_drawBitmap(uint8_t* bmp, uint8_t x, uint8_t y, uint8_t width,
     }
 }
 
+/**
+  * @brief  Initialize ST7565 display
+  * @param  none
+  * @retval none
+  */
 static void ST7565_DisplayInit(void)
 {
 	// make reset
@@ -130,11 +155,21 @@ static void ST7565_DisplayInit(void)
 	ST7565_SetBrightness(10);
 }
 
+/**
+  * @brief  Clear framebuffer data
+  * @param  none
+  * @retval none
+  */
 static void ST7565_ClearBuffer(void)
 {
 	memset(lcd_framebuffer, 0, sizeof(lcd_framebuffer));
 }
 
+/**
+  * @brief  Write framebuffer data to display memory
+  * @param  none
+  * @retval none
+  */
 static void ST7565_UpdateBuffer(void)
 {
 	for(uint8_t page = 0; page < 8; page++)
@@ -150,6 +185,11 @@ static void ST7565_UpdateBuffer(void)
 	}
 }
 
+/**
+  * @brief  Set display contrast
+  * @param  brightness - contrast value (0...63)
+  * @retval none
+  */
 static void ST7565_SetBrightness(uint8_t brightness)
 {
 	if(brightness > 63) brightness = 63;
@@ -157,6 +197,11 @@ static void ST7565_SetBrightness(uint8_t brightness)
 	ST7565_writeCommand(CMD_SET_VOLUME_SECOND | (brightness & 0x3F));
 }
 
+/**
+  * @brief  Write string data to framebuffer
+  * @param  string - data structure with string parameters
+  * @retval none
+  */
 static void ST7565_SetStringInBuffer(String* string)
 {
 	uint8_t x = string->x_pos, y = string->y_pos, x_inv = 0;
@@ -189,6 +234,11 @@ static void ST7565_SetStringInBuffer(String* string)
 	}
 }
 
+/**
+  * @brief  Write window data to framebuffer
+  * @param  wnd - data structure with window parameters
+  * @retval none
+  */
 static void ST7565_SetWindow(pWindow wnd)
 {
 	int i;
@@ -199,6 +249,14 @@ static void ST7565_SetWindow(pWindow wnd)
     }
 }
 
+/**
+  * @brief  Invert display region data in framebuffer
+  * @param  xn - x-coordinate of top-left corner
+  * @param  yn - y-coordinate of top-left corner
+  * @param  xk - x-coordinate of bottom-right corner
+  * @param  yk - y-coordinate of bottom-right corner
+  * @retval none
+  */
 static void ST7565_InvertRegion(uint8_t xn, uint8_t yn, uint8_t xk, uint8_t yk)
 {
 	uint8_t mask = 0;
@@ -232,6 +290,12 @@ static void ST7565_InvertRegion(uint8_t xn, uint8_t yn, uint8_t xk, uint8_t yk)
 	}
 }
 
+/**
+  * @brief  Write pixel in framebuffer
+  * @param  x - x-coordinate of pixel
+  * @param  y - y-coordinate of pixel
+  * @retval none
+  */
 static void ST7565_DrawPixel(uint8_t x, uint8_t y)
 {
 	// transform y-coordinate
@@ -240,6 +304,14 @@ static void ST7565_DrawPixel(uint8_t x, uint8_t y)
 	lcd_framebuffer[LCDWIDTH*(y>>3)+x] |= 1<<(y%8);
 }
 
+/**
+  * @brief  Write line data in framebuffer
+  * @param  xn - x-coordinate of line start
+  * @param  yn - y-coordinate of line start
+  * @param  xk - x-coordinate of line end
+  * @param  yk - y-coordinate of line end
+  * @retval none
+  */
 static void ST7565_DrawLine(int8_t xn, int8_t yn, int8_t xk, int8_t yk)
 {
 	int8_t deltax = 0, deltay = 0, x = 0, y = 0, xinc1 = 0, xinc2 = 0,
@@ -307,6 +379,13 @@ static void ST7565_DrawLine(int8_t xn, int8_t yn, int8_t xk, int8_t yk)
 	}
 }
 
+/**
+  * @brief  Write circle data in framebuffer
+  * @param  x - x-coordinate of circle center
+  * @param  y - y-coordinate of circle center
+  * @param  R - circle radius in pixels
+  * @retval none
+  */
 static void ST7565_DrawCircle(uint8_t x, uint8_t y, uint8_t R)
 {
 	int8_t  decision;       /* Decision Variable */
@@ -341,6 +420,14 @@ static void ST7565_DrawCircle(uint8_t x, uint8_t y, uint8_t R)
 	}
 }
 
+/**
+  * @brief  Write ellipse data in framebuffer
+  * @param  x_pos - x-coordinate of ellipse center
+  * @param  y_pos - y-coordinate of ellipse center
+  * @param  rad_x - ellipse radius by x-coordinate in pixels
+  * @param  rad_y - ellipse radius by y-coordinate in pixels
+  * @retval none
+  */
 static void ST7565_DrawEllipse(uint8_t x_pos, uint8_t y_pos, uint8_t rad_x, uint8_t rad_y)
 {
     char x = 0, y = -rad_x, err = 2-2*rad_y, e2;
@@ -368,6 +455,14 @@ static void ST7565_DrawEllipse(uint8_t x_pos, uint8_t y_pos, uint8_t rad_x, uint
     while (y <= 0);
 }
 
+/**
+  * @brief  Write rectangular data in framebuffer
+  * @param  x_pos - x-coordinate of top-left corner
+  * @param  y_pos - y-coordinate of top-left corner
+  * @param  width - rectangular width in pixels
+  * @param  height - rectangular height in pixels
+  * @retval none
+  */
 static void ST7565_DrawRect(uint8_t x_pos, uint8_t y_pos,uint8_t width, uint8_t height)
 {
 	ST7565_DrawLine(x_pos,y_pos,x_pos+width,y_pos);
@@ -376,6 +471,14 @@ static void ST7565_DrawRect(uint8_t x_pos, uint8_t y_pos,uint8_t width, uint8_t 
 	ST7565_DrawLine(x_pos,y_pos,x_pos,y_pos+height);
 }
 
+/**
+  * @brief  Write filled rectangular data in framebuffer
+  * @param  x_pos - x-coordinate of top-left corner
+  * @param  y_pos - y-coordinate of top-left corner
+  * @param  width - rectangular width in pixels
+  * @param  height - rectangular height in pixels
+  * @retval none
+  */
 static void ST7565_FillRect(uint8_t x_pos, uint8_t y_pos,uint8_t width, uint8_t height)
 {
     for(;height>0;height--)
@@ -385,6 +488,13 @@ static void ST7565_FillRect(uint8_t x_pos, uint8_t y_pos,uint8_t width, uint8_t 
     }
 }
 
+/**
+  * @brief  Write filled circle data in framebuffer
+  * @param  Xpos - x-coordinate of circle center
+  * @param  Ypos - y-coordinate of circle center
+  * @param  Radius - circle radius in pixels
+  * @retval none
+  */
 static void ST7565_FillCircle(uint8_t Xpos, uint8_t Ypos, uint8_t Radius)
 {
 	int8_t  decision;        /* Decision Variable */
@@ -423,6 +533,14 @@ static void ST7565_FillCircle(uint8_t Xpos, uint8_t Ypos, uint8_t Radius)
 	ST7565_DrawCircle(Xpos, Ypos, Radius);
 }
 
+/**
+  * @brief  Write filled ellipse data in framebuffer
+  * @param  Xpos - x-coordinate of ellipse center
+  * @param  Ypos - y-coordinate of ellipse center
+  * @param  XRadius - ellipse radius by x-coordinate in pixels
+  * @param  YRadius - ellipse radius by y-coordinate in pixels
+  * @retval none
+  */
 static void ST7565_FillEllipse(uint8_t Xpos, uint8_t Ypos, uint8_t XRadius, uint8_t YRadius)
 {
 	char x = 0, y = -XRadius, err = 2-2*YRadius, e2;
@@ -449,6 +567,13 @@ static void ST7565_FillEllipse(uint8_t Xpos, uint8_t Ypos, uint8_t XRadius, uint
 	while (y <= 0);
 }
 
+/**
+  * @brief  Write battery indicator bitmap data in framebuffer
+  * @param  xn - x-coordinate of top-left corner
+  * @param  yn - y-coordinate of top-left corner
+  * @param  percentage - battery charge percentage (0...10)
+  * @retval none
+  */
 static void ST7565_DrawBatteryIndicator(uint8_t xn, uint8_t yn, uint8_t percentage)
 {
 	uint8_t BatteryBorder[12] = {0x3C,0x66,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x7E};
@@ -467,6 +592,12 @@ static void ST7565_DrawBatteryIndicator(uint8_t xn, uint8_t yn, uint8_t percenta
     ST7565_drawBitmap(BatteryBorder, xn, yn, 12, 6);
 }
 
+/**
+  * @brief  Write fan indicator bitmap data in framebuffer
+  * @param  xn - x-coordinate of top-left corner
+  * @param  yn - y-coordinate of top-left corner
+  * @retval none
+  */
 static void ST7565_DrawFanIndicator(uint8_t xn, uint8_t yn)
 {
     uint8_t fan_bitmap[24] = {0x1E,0x91,0xA1,0xA1,0xFE,0x90,0x9C,0xF3,0x51,0x51,0x91,0x8E,

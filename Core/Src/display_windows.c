@@ -9,6 +9,13 @@
 
 static float GetCurrentChangeStep(float current);
 
+/**
+  * @brief  Callback function for drawing main window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     float max_current;
@@ -121,6 +128,13 @@ int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_
     return 0;
 }
 
+/**
+  * @brief  Callback function for drawing settings menu window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_action)
 {
     const char* items[SETTINGS_ITEMS_NUM]  = {"Mode\0","Max power\0","Calibration\0","Battery\0","Quit\0"};
@@ -178,6 +192,13 @@ int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action value_actio
     return 0;
 }
 
+/**
+  * @brief  Callback function for drawing electronic load working mode window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Simple\0","Discharge\0"};
@@ -293,6 +314,13 @@ int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_ac
     return 1;
 }
 
+/**
+  * @brief  Callback function for drawing electronic load max power settings window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* max_power_space[3] = {" \0", "  \0", "   \0"};
@@ -378,6 +406,13 @@ int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action valu
     return 1;
 }
 
+/**
+  * @brief  Callback function for drawing calibration mode window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Current\0","Voltage\0"};
@@ -537,6 +572,13 @@ int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action v
     return 1;
 }
 
+/**
+  * @brief  Callback function for drawing battery voltage window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
 int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     switch(item_action)
@@ -571,6 +613,11 @@ int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value
     return 1;
 }
 
+/**
+  * @brief  This function returns current step of changing setting current
+  * @param  current - setting current value
+  * @retval step - step value for the given current
+  */
 static float GetCurrentChangeStep(float current)
 {
     float current_change_step;

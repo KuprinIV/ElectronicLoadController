@@ -41,6 +41,11 @@ static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 Data loadData = {0, 0, 0.0f, 0.1f, 0.0f, 0.0f, 0.0f, 20.0f, 0, 1, SimpleLoad, 3.0f, 1, 1, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
 		0, 4.2f, 250, 0, 0, 0, 0, 0};
 
+/**
+  * @brief  Electronic load control initialization
+  * @param  none
+  * @retval none
+  */
 static void loadInit(void)
 {
 	// read calibration data, if it was saved
@@ -58,11 +63,21 @@ static void loadInit(void)
 	HAL_ADC_Start_DMA(&hadc, (uint32_t*)adcSamples, sizeof(adcSamples)/sizeof(uint16_t));
 }
 
+/**
+  * @brief  Electronic load set current
+  * @param  val - current value in DAC discreets
+  * @retval none
+  */
 static void setCurrent(uint16_t val)
 {
 	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
 }
 
+/**
+  * @brief  This function returns encoder offset value
+  * @param  none
+  * @retval encoder offset value (0 - no offset, <0 - turned by counterclockwise, >0 - turned by clockwise)
+  */
 static int16_t getEncoderOffset(void)
 {
 	int16_t offset = 0;
@@ -75,6 +90,11 @@ static int16_t getEncoderOffset(void)
 	return offset;
 }
 
+/**
+  * @brief  Save calibration data in EEPROM
+  * @param  cd - pointer to data structure with calibration data
+  * @retval none
+  */
 static void saveCalibrationData(CalibrationData* cd)
 {
 	HAL_StatusTypeDef flash_ok = HAL_ERROR;
@@ -106,6 +126,11 @@ static void saveCalibrationData(CalibrationData* cd)
 	HAL_FLASHEx_DATAEEPROM_Lock();
 }
 
+/**
+  * @brief  Calculate displayed parameters after ADC conversion end
+  * @param  none
+  * @retval none
+  */
 static void calcMeasuredParams(void)
 {
 	uint32_t adc_averaged_data[5] = {0};
@@ -136,12 +161,22 @@ static void calcMeasuredParams(void)
 	}
 }
 
+/**
+  * @brief  Set fan speed
+  * @param  fs - fan speed duty cycle (0...99)
+  * @retval none
+  */
 static void setFanSpeed(uint8_t fs)
 {
 	if(fs > 99) fs = 99;
 	TIM21->CCR2 = fs;
 }
 
+/**
+  * @brief  Calculate current value in amperes from ADC discreets
+  * @param  adc_val - current value in ADC discreets
+  * @retval current value in amperes
+  */
 static float calcCurrent(uint16_t adc_val)
 {
 	float current = 0.0f;
@@ -166,6 +201,11 @@ static float calcCurrent(uint16_t adc_val)
 	return current;
 }
 
+/**
+  * @brief  Calculate voltage value in volts from ADC discreets
+  * @param  adc_val - voltage value in ADC discreets
+  * @retval voltage value in volts
+  */
 static float calcVoltage(uint16_t adc_val)
 {
 	float voltage = 0.0f;
@@ -202,6 +242,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	loadData.is_conversion_ended = 1;
 }
 
+/**
+  * @brief  Input Capture callback in non-blocking mode
+  * @param  htim TIM IC handle
+  * @retval None
+  */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	/* Captured Values */
@@ -271,6 +316,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	}
 }
 
+/**
+  * @brief  Period elapsed callback in non-blocking mode
+  * @param  htim TIM handle
+  * @retval None
+  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if(htim->Instance == TIM21)
