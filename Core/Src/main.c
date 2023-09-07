@@ -174,6 +174,7 @@ int main(void)
 		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage)
 		  {
 			  // if accumulator voltage lower discharge voltage level, reset current
+			  load_control_drv->setEnabled(0);
 		  }
 	  }
 

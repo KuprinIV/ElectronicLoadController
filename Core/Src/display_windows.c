@@ -56,6 +56,7 @@ static void windowsInit(void)
 {
 	// init display
 	st7565_drv->displayInit();
+	st7565_drv->setBrightness(loadData.load_settings.display_contrast);
 
 	// init windows
 	DispMainWnd.callback = &DisplayMainWindow;
@@ -181,7 +182,18 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
 {
     float max_current;
     float step = 0.01f;
-    uint8_t charge = 10*(data->vbat - VBAT_LOW)/(4.2f-VBAT_LOW);
+    uint8_t charge = 0;
+
+    // calculate battery charge percentage
+    if(data->vbat > VBAT_LOW)
+    {
+    	charge = 10*(data->vbat - VBAT_LOW)/(4.2f-VBAT_LOW);
+    }
+    else
+    {
+    	charge = 0;
+    }
+
 
     max_current = (float)data->load_settings.max_power/data->voltage;
     if(max_current > 20.0f) max_current = 20.0f;
@@ -209,6 +221,9 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
             else data->set_current = max_current;
             break;
     }
+
+    // set current value
+    load_control_drv->setCurrentInAmperes(data->set_current);
 
     wnd->strings[0].x_pos = 3;
     wnd->strings[0].y_pos = 2;
@@ -358,10 +373,20 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
 {
     const char* modes[3]  = {"Simple\0","Discharge\0","Ramp up\0"};
     uint16_t ramp_lengths[6] = {10, 20, 50, 100, 200, 500};
-    uint8_t mode_cntr = 0;
-    uint8_t ramps_cntr = 0;
+    int8_t mode_cntr = (int8_t)data->load_settings.load_work_mode;
+    int8_t ramps_cntr = 0;
     int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
     float step = 0.05f;
+
+    // get ramp length counter
+    for(uint8_t i = 0; i < 6; i++)
+    {
+    	if(ramp_lengths[i] == data->load_settings.current_ramp_time)
+    	{
+    		ramps_cntr = i;
+    		break;
+    	}
+    }
 
     if(data->load_settings.discharge_voltage < 5.0f) step = 0.05f;
     else if(data->load_settings.discharge_voltage < 20.0f) step = 0.1f;
@@ -407,7 +432,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             	}
             	else if(data->load_settings.load_work_mode == Ramp)
             	{
-                    if(++ramps_cntr >= sizeof(ramp_lengths)/2)
+                    if(++ramps_cntr > 5)
                     {
                     	ramps_cntr = 0;
                     }
@@ -419,7 +444,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         case Prev:
             if(mode_current_item == 1)
             {
-                if(--mode_cntr > 2)
+                if(--mode_cntr < 0)
                 {
                 	mode_cntr = 2;
                 }
@@ -434,9 +459,9 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             	}
             	else if(data->load_settings.load_work_mode == Ramp)
             	{
-                    if(--ramps_cntr >= sizeof(ramp_lengths)/2)
+                    if(--ramps_cntr < 0)
                     {
-                    	ramps_cntr = sizeof(ramp_lengths)/2-1;
+                    	ramps_cntr = 5;
                     }
                     data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
             	}
@@ -588,6 +613,8 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
         step = GetCurrentChangeStep(data->set_current);
         steps_num = (int)(data->set_current/step);
         data->set_current = steps_num*step;
+        // limit current value
+        load_control_drv->setCurrentInAmperes(data->set_current);
     }
 
     wnd->strings[0].x_pos = 15;
@@ -639,7 +666,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         case NoAction:
             if(calibration_current_item < 4)
             {
-                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
+                load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
         	break;
 
@@ -659,7 +686,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             }
             else if(calibration_current_item < 4)
             {
-                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
+                load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
     }
@@ -674,7 +701,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             if(calibration_current_item < 4)
             {
                 calibration_data_ptr[calibration_current_item - 1]++;
-                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
+                load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
 
@@ -682,7 +709,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             if(calibration_current_item < 4)
             {
                 calibration_data_ptr[calibration_current_item - 1]--;
-                load_control_drv->setCurrent(calibration_data_ptr[calibration_current_item - 1]);
+                load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
             break;
     }
@@ -723,7 +750,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = NotInverted;
-//        calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw;
+//        calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw; // TODO: uncomment after device assembly
         sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
         wnd->strings[5].x_pos = 0;
@@ -771,7 +798,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[2].align = AlignCenter;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
-//            calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw;
+//            calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw; // TODO: uncomment after device assembly
             sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
             wnd->strings[3].x_pos = 0;
@@ -867,6 +894,9 @@ static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Actio
             else data->load_settings.display_contrast = 32;
             break;
     }
+
+    // set display contrast
+    st7565_drv->setBrightness(data->load_settings.display_contrast);
 
     wnd->strings[0].x_pos = 15;
     wnd->strings[0].y_pos = 25;

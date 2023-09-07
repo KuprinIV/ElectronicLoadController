@@ -13,6 +13,7 @@
 #define NUM_OF_SAMPLES 			100
 #define EEPROM_CAL_DATA_ADDR 	0x08080000
 #define EEPROM_LOAD_SET_ADDR 	0x08080020
+#define IS_EEPROM_WRITTEN_SIGN	0x55555555
 #define MAH_CALC_LIMIT 			0.01f
 #define VBAT_LOW				3.4f
 #define POWER_OFF_TICKS			30
@@ -72,7 +73,8 @@ typedef struct
 typedef struct
 {
 	void (*loadInit)(void);
-	void (*setCurrent)(uint16_t val);
+	void (*setCurrentInDiscreets)(uint16_t val);
+	void (*setCurrentInAmperes)(float val);
 	void (*setEnabled)(uint8_t state);
 	int16_t (*getEncoderOffset)(void);
 	void (*saveCalibrationData)(CalibrationData* cd);

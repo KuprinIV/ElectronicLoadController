@@ -10,7 +10,8 @@
 
 // driver functions
 static void loadInit(void);
-static void setCurrent(uint16_t val);
+static void setCurrentInDiscreets(uint16_t val);
+static void setCurrentInAmperes(float val);
 static void setEnabled(uint8_t state);
 static int16_t getEncoderOffset(void);
 static void saveCalibrationData(CalibrationData* cd);
@@ -23,12 +24,14 @@ static void checkPowerButton(void);
 
 // inner functions
 static void setDacValue(uint16_t val);
-static float calcCurrent(uint16_t adc_val);
+static float calcCurrent2Float(uint16_t adc_val);
+static uint16_t calcCurrent2Discreete(float ampere_val);
 static float calcVoltage(uint16_t adc_val);
 
 LoadController lc_driver = {
 		loadInit,
-		setCurrent,
+		setCurrentInDiscreets,
+		setCurrentInAmperes,
 		setEnabled,
 		getEncoderOffset,
 		saveCalibrationData,
@@ -61,20 +64,20 @@ Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {50, 5
 static void loadInit(void)
 {
 	// read calibration data, if it was saved
-	if((*(__IO uint32_t *)EEPROM_CAL_DATA_ADDR) != 0)
+	if((*(__IO uint32_t *)EEPROM_CAL_DATA_ADDR) == IS_EEPROM_WRITTEN_SIGN)
 	{
-		memcpy(&loadData.calibration_data, (uint32_t *)EEPROM_CAL_DATA_ADDR, sizeof(CalibrationData));
+		memcpy(&loadData.calibration_data, (uint8_t*)EEPROM_CAL_DATA_ADDR+4, sizeof(CalibrationData));
 	}
 
 	// read load settings data, if it was saved
-	if((*(__IO uint32_t *)EEPROM_LOAD_SET_ADDR) != 0)
+	if((*(__IO uint32_t *)EEPROM_LOAD_SET_ADDR) == IS_EEPROM_WRITTEN_SIGN)
 	{
-		memcpy(&loadData.load_settings, (uint32_t *)EEPROM_LOAD_SET_ADDR, sizeof(LoadSettings));
+		memcpy(&loadData.load_settings, (uint8_t*)EEPROM_LOAD_SET_ADDR+4, sizeof(LoadSettings));
 	}
 
 	// start DAC
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0); // set default value
+	setCurrentInAmperes(0.0f); // set default value
 
 	// start ADC conversion
 	HAL_TIM_Base_Start(&htim6);
@@ -82,17 +85,28 @@ static void loadInit(void)
 }
 
 /**
-  * @brief  Electronic load set current
+  * @brief  Electronic load set current in DAC discreets
   * @param  val - current value in DAC discreets
   * @retval none
   */
-static void setCurrent(uint16_t val)
+static void setCurrentInDiscreets(uint16_t val)
 {
 	loadData.set_current_raw = val;
 	if(loadData.on_state)
 	{
 		setDacValue(val);
 	}
+}
+
+/**
+  * @brief  Electronic load set current in amperes
+  * @param  val - current value in amperes
+  * @retval none
+  */
+static void setCurrentInAmperes(float val)
+{
+	uint16_t dac_val = calcCurrent2Discreete(val);
+	setCurrentInDiscreets(dac_val);
 }
 
 /**
@@ -138,23 +152,27 @@ static int16_t getEncoderOffset(void)
 static void saveCalibrationData(CalibrationData* cd)
 {
 	HAL_StatusTypeDef flash_ok = HAL_ERROR;
-	uint8_t num_of_words = (sizeof(CalibrationData)>>2)+1;
-	uint32_t* cd_ptr = (uint32_t*)cd;
+	uint8_t num_of_words = sizeof(CalibrationData);
+	uint8_t* cd_ptr = (uint8_t*)cd;
 
 	HAL_FLASHEx_DATAEEPROM_Unlock();
 
 	// erase EEPROM
-	for(uint8_t i = 0; i < num_of_words; i++)
+	flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_CAL_DATA_ADDR);
+	for(uint8_t i = 0; i < num_of_words/4+1; i++)
 	{
-		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_CAL_DATA_ADDR+4*i);
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_CAL_DATA_ADDR+4*i+4);
 	}
 
 	// save calibration coefficients
 	if(flash_ok == HAL_OK)
 	{
+		// write signature
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_CAL_DATA_ADDR, IS_EEPROM_WRITTEN_SIGN);
+		// write data
 		for(uint8_t i = 0; i < num_of_words; i++)
 		{
-			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_CAL_DATA_ADDR+4*i, cd_ptr[i]);
+			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_BYTE, EEPROM_CAL_DATA_ADDR+i+4, cd_ptr[i]);
 		}
 
 		if(flash_ok != HAL_OK)
@@ -174,23 +192,28 @@ static void saveCalibrationData(CalibrationData* cd)
 static void saveLoadSettings(LoadSettings* ls)
 {
 	HAL_StatusTypeDef flash_ok = HAL_ERROR;
-	uint8_t num_of_words = (sizeof(LoadSettings)>>2)+1;
-	uint32_t* ls_ptr = (uint32_t*)ls;
+	uint8_t num_of_words = sizeof(LoadSettings);
+	uint8_t* ls_ptr = (uint8_t*)ls;
 
 	HAL_FLASHEx_DATAEEPROM_Unlock();
 
 	// erase EEPROM
-	for(uint8_t i = 0; i < num_of_words; i++)
+	flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_SET_ADDR);
+	for(uint8_t i = 0; i < num_of_words/4+1; i++)
 	{
-		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_SET_ADDR+4*i);
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_SET_ADDR+4*i+4);
 	}
 
 	// save calibration coefficients
 	if(flash_ok == HAL_OK)
 	{
+		// write signature
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_SET_ADDR, IS_EEPROM_WRITTEN_SIGN);
+
+		// write data
 		for(uint8_t i = 0; i < num_of_words; i++)
 		{
-			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_SET_ADDR+4*i, ls_ptr[i]);
+			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_BYTE, EEPROM_LOAD_SET_ADDR+i+4, ls_ptr[i]);
 		}
 
 		if(flash_ok != HAL_OK)
@@ -226,7 +249,7 @@ static void calcMeasuredParams(void)
 	loadData.measured_current_raw = adc_averaged_data[3];
 	loadData.voltage_raw = (adc_averaged_data[4]);
 
-	loadData.measured_current = calcCurrent(adc_averaged_data[3]);
+	loadData.measured_current = calcCurrent2Float(adc_averaged_data[3]);
 	loadData.voltage = calcVoltage(adc_averaged_data[4]);
 
 	// calc mAh and Wh
@@ -297,10 +320,11 @@ static void checkPowerButton(void)
 	// if button is holding more 1.5 sec, make power off
 	if(tick_cntr == POWER_OFF_TICKS)
 	{
-		setEnabled(0); // reset current
-		st7565_drv->displayReset(); // reset display
-		powerControl(0); // power off
-		HAL_PWR_EnterSTANDBYMode();
+		// TODO: uncomment after battery using
+//		setEnabled(0); // reset current
+//		st7565_drv->displayReset(); // reset display
+//		powerControl(0); // power off
+//		HAL_PWR_EnterSTANDBYMode();
 	}
 }
 
@@ -326,7 +350,7 @@ static void setDacValue(uint16_t val)
   * @param  adc_val - current value in ADC discreets
   * @retval current value in amperes
   */
-static float calcCurrent(uint16_t adc_val)
+static float calcCurrent2Float(uint16_t adc_val)
 {
 	float current = 0.0f;
 
@@ -348,6 +372,34 @@ static float calcCurrent(uint16_t adc_val)
 	}
 
 	return current;
+}
+
+/**
+  * @brief  Calculate current value in DAC discreets from amperes
+  * @param  adc_val - current value in amperes
+  * @retval current value in DAC discreets
+  */
+static uint16_t calcCurrent2Discreete(float ampere_val)
+{
+	uint16_t result = 0;
+
+	if(ampere_val < 0.1f)
+	{
+		result = (uint16_t)(loadData.calibration_data.current_set_0A1-(0.1f-ampere_val)*(loadData.calibration_data.current_set_1A-loadData.calibration_data.current_set_0A1)/0.9f);
+	}
+	else if(ampere_val >= 0.1f && ampere_val < 1.0f)
+	{
+		result = (uint16_t)(loadData.calibration_data.current_set_0A1+(ampere_val-0.1f)*(loadData.calibration_data.current_set_1A-loadData.calibration_data.current_set_0A1)/0.9f);
+	}
+	else if(ampere_val >= 1.0f && ampere_val < 5.0f)
+	{
+		result = (uint16_t)(loadData.calibration_data.current_set_1A+(ampere_val-1.0f)*(loadData.calibration_data.current_set_5A-loadData.calibration_data.current_set_1A)/4.0f);
+	}
+	else
+	{
+		result = (uint16_t)(loadData.calibration_data.current_set_5A+(ampere_val-5.0f)*(loadData.calibration_data.current_set_5A-loadData.calibration_data.current_set_1A)/4.0f);
+	}
+	return result;
 }
 
 /**
