@@ -8,9 +8,11 @@
 #include "st7565.h"
 #include <string.h>
 
+#define ABS(x) (x) >= 0 ? (x):(-x)
+
 // driver functions
 static void loadInit(void);
-static void setCurrentInDiscreets(uint16_t val);
+static void setCurrentInDiscretes(uint16_t val);
 static void setCurrentInAmperes(float val);
 static void setEnabled(uint8_t state);
 static int16_t getEncoderOffset(void);
@@ -21,16 +23,17 @@ static void setFanSpeed(uint8_t fs);
 static void powerControl(uint8_t is_on);
 static uint8_t checkOvertemperature(void);
 static void checkPowerButton(void);
+static void updateTemperatureValue(void);
 
 // inner functions
 static void setDacValue(uint16_t val);
 static float calcCurrent2Float(uint16_t adc_val);
-static uint16_t calcCurrent2Discreete(float ampere_val);
+static uint16_t calcCurrent2Discrete(float ampere_val);
 static float calcVoltage(uint16_t adc_val);
 
 LoadController lc_driver = {
 		loadInit,
-		setCurrentInDiscreets,
+		setCurrentInDiscretes,
 		setCurrentInAmperes,
 		setEnabled,
 		getEncoderOffset,
@@ -40,18 +43,21 @@ LoadController lc_driver = {
 		setFanSpeed,
 		powerControl,
 		checkOvertemperature,
-		checkPowerButton
+		checkPowerButton,
+		updateTemperatureValue
 };
 LoadController* load_control_drv =  &lc_driver;
 
 extern ADC_HandleTypeDef hadc;
 extern DAC_HandleTypeDef hdac;
 extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart1;
 
 static uint16_t encoder_cntr = 32767;
 static uint16_t encoder_cntr_prev = 32767;
 static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
+static uint16_t rampVals[101] = {0};
 
 Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
@@ -82,16 +88,18 @@ static void loadInit(void)
 	// start ADC conversion
 	HAL_TIM_Base_Start(&htim6);
 	HAL_ADC_Start_DMA(&hadc, (uint32_t*)adcSamples, sizeof(adcSamples)/sizeof(uint16_t));
+
+	// init DS18B20 temperature sensor
+	ds18b20_drv->Init(&huart1);
 }
 
 /**
-  * @brief  Electronic load set current in DAC discreets
-  * @param  val - current value in DAC discreets
+  * @brief  Electronic load set current in DAC discretes
+  * @param  val - current value in DAC discretes
   * @retval none
   */
-static void setCurrentInDiscreets(uint16_t val)
+static void setCurrentInDiscretes(uint16_t val)
 {
-	loadData.set_current_raw = val;
 	if(loadData.on_state)
 	{
 		setDacValue(val);
@@ -105,8 +113,8 @@ static void setCurrentInDiscreets(uint16_t val)
   */
 static void setCurrentInAmperes(float val)
 {
-	uint16_t dac_val = calcCurrent2Discreete(val);
-	setCurrentInDiscreets(dac_val);
+	uint16_t dac_val = calcCurrent2Discrete(val);
+	setCurrentInDiscretes(dac_val);
 }
 
 /**
@@ -119,6 +127,10 @@ static void setEnabled(uint8_t state)
 	loadData.on_state = state;
 	if(loadData.on_state)
 	{
+		// reset mAh and Wh counters
+		loadData.mAh = 0.0f;
+		loadData.Wh = 0.0f;
+
 		setDacValue(loadData.set_current_raw);
 	}
 	else
@@ -317,8 +329,8 @@ static void checkPowerButton(void)
 	{
 		tick_cntr++;
 	}
-	// if button is holding more 1.5 sec, make power off
-	if(tick_cntr == POWER_OFF_TICKS)
+	// if button is holding more 1.5 sec or Vbat is lower VBAT_LOW value, make power off
+	if(tick_cntr == POWER_OFF_TICKS || loadData.vbat < VBAT_LOW)
 	{
 		// TODO: uncomment after battery using
 //		setEnabled(0); // reset current
@@ -329,25 +341,90 @@ static void checkPowerButton(void)
 }
 
 /**
-  * @brief  Write current value in discreets to DAC
-  * @param  val - current value in DAC discreets
+  * @brief  Update DS18B20 temperature
+  * @param  none
+  * @retval none
+  */
+static void updateTemperatureValue(void)
+{
+	static uint8_t tick_cntr;
+	if(tick_cntr++ >= TEMP_UPDATE_TICKS)
+	{
+		loadData.temperature = ds18b20_drv->GetTemperature();
+		tick_cntr = 0;
+	}
+}
+
+/**
+  * @brief  Write current value in discretes to DAC
+  * @param  val - current value in DAC discretes
   * @retval none
   */
 static void setDacValue(uint16_t val)
 {
+	uint16_t delta_val = ABS(val - loadData.set_current_raw);
+	uint16_t delta_samples = sizeof(rampVals)/2-1;
+	int16_t y = 0, yinc1 = 0, yinc2 = 0, den = 0, num = 0, numadd = 0, mul = 0;
+
 	if(loadData.load_settings.load_work_mode == Ramp)
 	{
+		// fill ramp values array
+		y = loadData.set_current_raw;
 
+		if (val >= loadData.set_current_raw)
+		{
+			yinc1 = 1;
+			yinc2 = 1;
+		}
+		else
+		{
+			yinc1 = -1;
+			yinc2 = -1;
+		}
+
+		if (delta_samples >= delta_val)
+		{
+			yinc2 = 0;
+			den = delta_samples;
+			num = delta_samples/2;
+			numadd = delta_val;
+		}
+		else
+		{
+	        mul = delta_val/delta_samples;
+	        yinc1 *= mul;
+	        yinc2 *= mul;
+	        den = mul > 1 ? delta_val : delta_samples;
+	        num = den/2;
+	        numadd = delta_val%delta_samples;
+		}
+
+		for (uint16_t i = 0; i < delta_samples; i++)
+		{
+			rampVals[i] = y;
+			num += numadd;                        /* Increase the numerator by the top of the fraction */
+			if (num >= den)                       /* Check if numerator >= denominator */
+			{
+				num -= den;                       /* Calculate the new numerator value */
+				y += yinc1;                       /* Change the y as appropriate */
+			}
+			y += yinc2;
+		}
+		rampVals[delta_samples] = val;
+		// write ramp values to DAC
+		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*)rampVals, 500, DAC_ALIGN_12B_R);
 	}
 	else
 	{
 		HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
 	}
+	// update set current raw value
+	loadData.set_current_raw = val;
 }
 
 /**
-  * @brief  Calculate current value in amperes from ADC discreets
-  * @param  adc_val - current value in ADC discreets
+  * @brief  Calculate current value in amperes from ADC discretуs
+  * @param  adc_val - current value in ADC discretes
   * @retval current value in amperes
   */
 static float calcCurrent2Float(uint16_t adc_val)
@@ -375,11 +452,11 @@ static float calcCurrent2Float(uint16_t adc_val)
 }
 
 /**
-  * @brief  Calculate current value in DAC discreets from amperes
+  * @brief  Calculate current value in DAC discretes from amperes
   * @param  adc_val - current value in amperes
-  * @retval current value in DAC discreets
+  * @retval current value in DAC discretes
   */
-static uint16_t calcCurrent2Discreete(float ampere_val)
+static uint16_t calcCurrent2Discrete(float ampere_val)
 {
 	uint16_t result = 0;
 
@@ -403,8 +480,8 @@ static uint16_t calcCurrent2Discreete(float ampere_val)
 }
 
 /**
-  * @brief  Calculate voltage value in volts from ADC discreets
-  * @param  adc_val - voltage value in ADC discreets
+  * @brief  Calculate voltage value in volts from ADC discretes
+  * @param  adc_val - voltage value in ADC discretes
   * @retval voltage value in volts
   */
 static float calcVoltage(uint16_t adc_val)

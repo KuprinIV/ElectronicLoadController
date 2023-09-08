@@ -176,6 +176,14 @@ int main(void)
 			  // if accumulator voltage lower discharge voltage level, reset current
 			  load_control_drv->setEnabled(0);
 		  }
+
+		  // update DS18B20 temperature and check over temperature event
+		  load_control_drv->updateTemperature();
+		  loadData.is_ovt = load_control_drv->checkOvertemperature();
+		  if(loadData.is_ovt && loadData.on_state) // if over temperature and load is enabled reset current
+		  {
+			  load_control_drv->setEnabled(0);
+		  }
 	  }
 
 	  // handle end of ADC data conversion event

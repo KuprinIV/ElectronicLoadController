@@ -372,14 +372,16 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
 static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[3]  = {"Simple\0","Discharge\0","Ramp up\0"};
-    uint16_t ramp_lengths[6] = {10, 20, 50, 100, 200, 500};
+    uint16_t ramp_lengths[4] = {10, 20, 50, 100};
     int8_t mode_cntr = (int8_t)data->load_settings.load_work_mode;
     int8_t ramps_cntr = 0;
+    int8_t modes_num = 3;
+    int8_t ramp_lengths_num = sizeof(ramp_lengths)/2;
     int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
     float step = 0.05f;
 
-    // get ramp length counter
-    for(uint8_t i = 0; i < 6; i++)
+    // get ramp length counter from saved value
+    for(uint8_t i = 0; i < ramp_lengths_num; i++)
     {
     	if(ramp_lengths[i] == data->load_settings.current_ramp_time)
     	{
@@ -417,7 +419,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         case Next:
             if(mode_current_item == 1)
             {
-                if(++mode_cntr > 2)
+                if(++mode_cntr > modes_num-1)
                 {
                 	mode_cntr = 0;
                 }
@@ -432,7 +434,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             	}
             	else if(data->load_settings.load_work_mode == Ramp)
             	{
-                    if(++ramps_cntr > 5)
+                    if(++ramps_cntr > ramp_lengths_num-1)
                     {
                     	ramps_cntr = 0;
                     }
@@ -446,7 +448,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             {
                 if(--mode_cntr < 0)
                 {
-                	mode_cntr = 2;
+                	mode_cntr = modes_num-1;
                 }
                 data->load_settings.load_work_mode = (LoadMode)mode_cntr;
             }
@@ -461,7 +463,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             	{
                     if(--ramps_cntr < 0)
                     {
-                    	ramps_cntr = 5;
+                    	ramps_cntr = ramp_lengths_num-1;
                     }
                     data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
             	}

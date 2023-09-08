@@ -9,6 +9,7 @@
 #define INC_LOAD_CONTROL_H_
 
 #include "main.h"
+#include "ds18b20.h"
 
 #define NUM_OF_SAMPLES 			100
 #define EEPROM_CAL_DATA_ADDR 	0x08080000
@@ -17,6 +18,7 @@
 #define MAH_CALC_LIMIT 			0.01f
 #define VBAT_LOW				3.4f
 #define POWER_OFF_TICKS			30
+#define TEMP_UPDATE_TICKS		20
 
 typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
 
@@ -84,6 +86,7 @@ typedef struct
 	void (*powerControl)(uint8_t is_on);
 	uint8_t (*checkOvertemperature)(void);
 	void (*checkPowerButton)(void);
+	void (*updateTemperature)(void);
 }LoadController;
 
 extern LoadController* load_control_drv;
