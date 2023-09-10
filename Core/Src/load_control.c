@@ -246,7 +246,7 @@ static void calcMeasuredParams(void)
 {
 	uint32_t adc_averaged_data[5] = {0};
 	// calc averaged ADC data
-	for(uint16_t i = 0; i < NUM_OF_SAMPLES; i++)
+	for(uint16_t i = 0; i < 5*NUM_OF_SAMPLES; i++)
 	{
 		adc_averaged_data[i%5] += adcSamples[i];
 	}
@@ -365,6 +365,8 @@ static void setDacValue(uint16_t val)
 	uint16_t delta_val = ABS(val - loadData.set_current_raw);
 	uint16_t delta_samples = sizeof(rampVals)/2-1;
 	int16_t y = 0, yinc1 = 0, yinc2 = 0, den = 0, num = 0, numadd = 0, mul = 0;
+
+	if(val == loadData.set_current_raw) return;
 
 	if(loadData.load_settings.load_work_mode == Ramp)
 	{
