@@ -187,7 +187,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     // calculate battery charge percentage
     if(data->vbat > VBAT_LOW)
     {
-    	charge = 10*(data->vbat - VBAT_LOW)/(4.2f-VBAT_LOW);
+    	charge = 10*(data->vbat - VBAT_LOW)/(4.2f-VBAT_LOW)+1;
     }
     else
     {
@@ -656,7 +656,7 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
 static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Current\0","Voltage\0"};
-    const char* refs[6] = {"0,1A", "1A", " 5A", "1V", "10V", "25V"};
+    const char* refs[6] = {"0,1A", "1A", " 5A", "2V", "10V", "25V"};
     int calibration_items_num = 7;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
 
@@ -680,8 +680,6 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             if(++calibration_current_item > calibration_items_num)
             {
                 calibration_current_item = 1;
-                // disable load
-                load_control_drv->setEnabled(0);
                 // save calibration data
                 load_control_drv->saveCalibrationData(&data->calibration_data);
                 return 0;
@@ -689,6 +687,11 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             else if(calibration_current_item < 4)
             {
                 load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
+            }
+            else if(calibration_current_item == 4)
+            {
+                // disable load
+                load_control_drv->setEnabled(0);
             }
             break;
     }

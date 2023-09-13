@@ -61,7 +61,7 @@ static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 static uint16_t rampVals[101] = {0};
 
-Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {50, 500, 2500, 50, 500, 2500, 80, 800, 2000},
+Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 /**
@@ -257,14 +257,17 @@ static void calcMeasuredParams(void)
 		adc_averaged_data[i] /= NUM_OF_SAMPLES;
 	}
 	// convert them
-	loadData.vbat = 2*adc_averaged_data[0]*3.3f/4096;
+	loadData.vbat = 0.00168f*adc_averaged_data[0]-0.33f;
 	loadData.vdac0_raw = adc_averaged_data[1];
 	loadData.vref_raw = adc_averaged_data[2];
 	loadData.measured_current_raw = adc_averaged_data[3];
 	loadData.voltage_raw = (adc_averaged_data[4]);
 
 	loadData.measured_current = calcCurrent2Float(adc_averaged_data[3]);
+	if(loadData.measured_current < 0.0f) loadData.measured_current = 0.0f;
+
 	loadData.voltage = calcVoltage(adc_averaged_data[4]);
+	if(loadData.voltage < 0.0f) loadData.voltage = 0.0f;
 
 	// calc mAh and Wh
 	if(loadData.measured_current >= MAH_CALC_LIMIT && loadData.on_state)
@@ -366,7 +369,7 @@ static void fanSpeedControl(void)
 {
 	static uint16_t tick_cntr;
 	static float temp_prev;
-	float Kp = 1.0f, Ki = 0.1f;
+	float Kp = 5.0f, Ki = 0.1f;
 	int8_t fan_speed = 0;
 
 	if(tick_cntr++ >= FAN_SPEED_CTRL_TICKS)
@@ -378,8 +381,8 @@ static void fanSpeedControl(void)
 		}
 		else
 		{
-			fan_speed = (uint8_t)(Kp*loadData.temperature+Ki*(loadData.temperature-temp_prev));
-			if(fan_speed > 10) fan_speed = 10;
+			fan_speed = (uint8_t)(Kp*(loadData.temperature-40.0f)+Ki*(loadData.temperature-temp_prev));
+			if(fan_speed > 100) fan_speed = 100;
 			if(fan_speed < 0) fan_speed = 0;
 			setFanSpeed((uint8_t)fan_speed);
 		}
@@ -399,6 +402,8 @@ static void setDacValue(uint16_t val)
 	int16_t y = 0, yinc1 = 0, yinc2 = 0, den = 0, num = 0, numadd = 0, mul = 0;
 
 	if(val == loadData.set_current_raw) return;
+
+	if(val > 4095) val = 4095; // limit max value by DAC 12-bit scale
 
 	if(loadData.load_settings.load_work_mode == Ramp)
 	{
@@ -522,13 +527,13 @@ static float calcVoltage(uint16_t adc_val)
 {
 	float voltage = 0.0f;
 
-	if(adc_val < loadData.calibration_data.voltage_1V)
+	if(adc_val < loadData.calibration_data.voltage_2V)
 	{
-		voltage = 1.0f - 9.0f*(loadData.calibration_data.voltage_1V - adc_val)/(loadData.calibration_data.voltage_10V-loadData.calibration_data.voltage_1V);
+		voltage = 2.0f - 8.0f*(loadData.calibration_data.voltage_2V - adc_val)/(loadData.calibration_data.voltage_10V-loadData.calibration_data.voltage_2V);
 	}
-	else if(adc_val >= loadData.calibration_data.voltage_1V && adc_val < loadData.calibration_data.voltage_10V)
+	else if(adc_val >= loadData.calibration_data.voltage_2V && adc_val < loadData.calibration_data.voltage_10V)
 	{
-		voltage = 1.0f + 9.0f*(adc_val - loadData.calibration_data.voltage_1V)/(loadData.calibration_data.voltage_10V-loadData.calibration_data.voltage_1V);
+		voltage = 2.0f + 8.0f*(adc_val - loadData.calibration_data.voltage_2V)/(loadData.calibration_data.voltage_10V-loadData.calibration_data.voltage_2V);
 	}
 	else if(adc_val >= loadData.calibration_data.voltage_10V && adc_val < loadData.calibration_data.voltage_25V)
 	{
