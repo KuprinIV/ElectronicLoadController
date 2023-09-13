@@ -52,7 +52,7 @@ static void DS18B20_Initialization(UART_HandleTypeDef* huart)
 	uint8_t settings[3];
 	settings[0] = temperatureSensor.temperatureLimitHigh;
 	settings[1] = temperatureSensor.temperatureLimitLow;
-	settings[2] = DS18B20_10_BITS_CONFIG; // set 0,5 °C resolution
+	settings[2] = DS18B20_12_BITS_CONFIG; // set 0,5 °C resolution
 
 	DS18B20_InitializationCommand(&temperatureSensor);
 	DS18B20_SkipRom(&temperatureSensor);

@@ -19,6 +19,7 @@
 #define VBAT_LOW				3.4f
 #define POWER_OFF_TICKS			30
 #define TEMP_UPDATE_TICKS		20
+#define FAN_SPEED_CTRL_TICKS	200
 
 typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
 
@@ -87,6 +88,7 @@ typedef struct
 	uint8_t (*checkOvertemperature)(void);
 	void (*checkPowerButton)(void);
 	void (*updateTemperature)(void);
+	void (*fanSpeedControl)(void);
 }LoadController;
 
 extern LoadController* load_control_drv;

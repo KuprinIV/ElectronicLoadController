@@ -24,6 +24,7 @@ static void powerControl(uint8_t is_on);
 static uint8_t checkOvertemperature(void);
 static void checkPowerButton(void);
 static void updateTemperatureValue(void);
+static void fanSpeedControl(void);
 
 // inner functions
 static void setDacValue(uint16_t val);
@@ -44,7 +45,8 @@ LoadController lc_driver = {
 		powerControl,
 		checkOvertemperature,
 		checkPowerButton,
-		updateTemperatureValue
+		updateTemperatureValue,
+		fanSpeedControl
 };
 LoadController* load_control_drv =  &lc_driver;
 
@@ -265,7 +267,7 @@ static void calcMeasuredParams(void)
 	loadData.voltage = calcVoltage(adc_averaged_data[4]);
 
 	// calc mAh and Wh
-	if(loadData.measured_current >= MAH_CALC_LIMIT)
+	if(loadData.measured_current >= MAH_CALC_LIMIT && loadData.on_state)
 	{
 		loadData.mAh += loadData.measured_current/36;
 		loadData.Wh += loadData.measured_current*loadData.voltage/36000;
@@ -313,30 +315,30 @@ static void checkPowerButton(void)
 {
 	static uint8_t tick_cntr;
 	static uint8_t button_prev_state;
+	static uint8_t is_powered_on;
 
-	if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && !button_prev_state) // button was pressed
+	if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && !button_prev_state && is_powered_on) // button was pressed
 	{
 		button_prev_state = 1;
 		loadData.on_state ^= 0x01; // toggle load enabled state
 		setEnabled(loadData.on_state);
 	}
-	else if((PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && button_prev_state) // button was released
+	else if((PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && (button_prev_state || !is_powered_on)) // button was released
 	{
 		button_prev_state = 0;
 		tick_cntr = 0;
+		if(!is_powered_on) is_powered_on = 1;
 	}
-	else if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && button_prev_state) // button is holding on
+	else if(!(PWR_BTN_GPIO_Port->IDR & PWR_BTN_Pin) && button_prev_state && is_powered_on) // button is holding on
 	{
 		tick_cntr++;
 	}
 	// if button is holding more 1.5 sec or Vbat is lower VBAT_LOW value, make power off
 	if(tick_cntr == POWER_OFF_TICKS || loadData.vbat < VBAT_LOW)
 	{
-		// TODO: uncomment after battery using
-//		setEnabled(0); // reset current
-//		st7565_drv->displayReset(); // reset display
-//		powerControl(0); // power off
-//		HAL_PWR_EnterSTANDBYMode();
+		setEnabled(0); // reset current
+		st7565_drv->displayReset(); // reset display
+		powerControl(0); // power off
 	}
 }
 
@@ -352,6 +354,36 @@ static void updateTemperatureValue(void)
 	{
 		loadData.temperature = ds18b20_drv->GetTemperature();
 		tick_cntr = 0;
+	}
+}
+
+/**
+  * @brief  Fan speed control
+  * @param  none
+  * @retval none
+  */
+static void fanSpeedControl(void)
+{
+	static uint16_t tick_cntr;
+	static float temp_prev;
+	float Kp = 1.0f, Ki = 0.1f;
+	int8_t fan_speed = 0;
+
+	if(tick_cntr++ >= FAN_SPEED_CTRL_TICKS)
+	{
+		tick_cntr = 0;
+		if(loadData.temperature < 40.0f)
+		{
+			setFanSpeed(0);
+		}
+		else
+		{
+			fan_speed = (uint8_t)(Kp*loadData.temperature+Ki*(loadData.temperature-temp_prev));
+			if(fan_speed > 10) fan_speed = 10;
+			if(fan_speed < 0) fan_speed = 0;
+			setFanSpeed((uint8_t)fan_speed);
+		}
+		temp_prev = loadData.temperature;
 	}
 }
 

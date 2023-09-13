@@ -752,7 +752,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = NotInverted;
-//        calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw; // TODO: uncomment after device assembly
+        calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw;
         sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
         wnd->strings[5].x_pos = 0;
@@ -800,7 +800,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[2].align = AlignCenter;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
-//            calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw; // TODO: uncomment after device assembly
+            calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw;
             sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
 
             wnd->strings[3].x_pos = 0;
