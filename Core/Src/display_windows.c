@@ -719,7 +719,6 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         case Next:
             if(++calibration_current_item > calibration_items_num)
             {
-                calibration_current_item = 1;
                 // save or not calibration data
                 if(save_calibration_data_item == 0)
                 {
@@ -731,6 +730,8 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
                 	// else restore loadData from EEPROM
                 	load_control_drv->readCalibrationData();
                 }
+                calibration_current_item = 1;
+                save_calibration_data_item = 0;
                 return 0;
             }
             else if(calibration_current_item < 4)
