@@ -6,7 +6,7 @@
  */
 #include "st7565.h"
 #include <string.h>
-#include <stdio.h>
+#include "print_to_string.h"
 
 #define ABS(x) (x) >= 0 ? (x):(-x)
 
@@ -223,7 +223,7 @@ static void ST7565_SetStringInBuffer(String* string)
 	uint8_t x = string->x_pos, y = string->y_pos, x_inv = 0;
 	const unsigned char* pStr = (const unsigned char*)string->Text;
 	uint8_t currentCharWidth = 0;
-	int Length = strlen((char*)string->Text),LengthInv = Length, widthInPixels = 0;
+	int Length = print2str_drv->StrLen((char*)string->Text),LengthInv = Length, widthInPixels = 0;
 	//calculate width of text in pixels
 	const unsigned char* lStr = (const unsigned char*)string->Text;
 	while(LengthInv-- > 0)
@@ -633,7 +633,7 @@ static void ST7565_DrawOnOffButton(uint8_t xn, uint8_t yn, uint8_t state)
 	const char* labels[2] = {"Off", "On"};
 	uint8_t margins[2] = {4, 7};
 	String str = {xn+margins[state], yn+2, AlignLeft, font6x8, "", state == 1 ? Inverted : NotInverted};
-	sprintf(str.Text, "%s", labels[state]);
+	print2str_drv->PrintString(str.Text, "", labels[state]);
 	uint8_t button_border[50] = {0xFC, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0xFC,
 								 0x01, 0x02, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x02, 0x01};
 	if(state)

@@ -5,7 +5,6 @@
  */
 #include "display_windows.h"
 #include "load_control.h"
-#include <stdio.h>
 
 // driver functions
 static void windowsInit(void);
@@ -183,6 +182,13 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     float max_current;
     float step = 0.01f;
     uint8_t charge = 0;
+    int precisions[2] = {2, 1};
+    const char* deg = "°C";
+    int rpm = (int)data->rpm;
+    float params[2] = {data->voltage, data->measured_current};
+    const char* units[2] = {" B  ", " A"};
+    const char vdis_pre_string[] = "Vdis:";
+    const char iset_pre_string[] = "Iset:";
 
     // calculate battery charge percentage
     if(data->vbat > VBAT_LOW)
@@ -230,14 +236,14 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = data->is_ovt == 1 ? Inverted : NotInverted;
-    sprintf(wnd->strings[0].Text, "%0.1f°C", data->temperature);
+    print2str_drv->PrintFloat(wnd->strings[0].Text, "", &data->temperature, &deg, &precisions[1], 1);
 
     wnd->strings[1].x_pos = 70;
     wnd->strings[1].y_pos = 2;
     wnd->strings[1].align = AlignLeft;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = NotInverted;
-    sprintf(wnd->strings[1].Text, "%d", data->rpm);
+    print2str_drv->PrintInteger(wnd->strings[1].Text, "", &rpm, NULL, 1);
 
     wnd->strings[2].x_pos = 0;
     wnd->strings[2].y_pos = 13;
@@ -246,47 +252,64 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[2].inverted = NotInverted;
     if(data->measured_current >= 5.0f)
     {
-        sprintf(wnd->strings[2].Text, "%0.1f B  %0.1f A", data->voltage, data->measured_current);
+    	precisions[1] = 1;
     }
     else
     {
-        sprintf(wnd->strings[2].Text, "%0.1f B  %0.2f A", data->voltage, data->measured_current);
+    	precisions[1] = 2;
     }
+    print2str_drv->PrintFloat(wnd->strings[2].Text, "", params, units, precisions, 2);
 
     wnd->strings[3].x_pos = 0;
     wnd->strings[3].y_pos = 33;
     wnd->strings[3].align = AlignCenter;
     wnd->strings[3].font = font6x8;
     wnd->strings[3].inverted = NotInverted;
-    sprintf(wnd->strings[3].Text, "%0.0f mAh  %0.1f Wh", data->mAh, data->Wh);
+    params[0] = data->mAh;
+    params[1] = data->Wh;
+    units[0] = " mAh  ";
+    units[1] = " Wh";
+    precisions[0] = 0;
+    precisions[1] = 1;
+    print2str_drv->PrintFloat(wnd->strings[3].Text, "", params, units, precisions, 2);
 
     wnd->strings[4].x_pos = 0;
     wnd->strings[4].y_pos = 42;
     wnd->strings[4].align = AlignCenter;
     wnd->strings[4].font = font6x8;
     wnd->strings[4].inverted = NotInverted;
+
+    params[0] = data->load_settings.discharge_voltage;
+    params[1] = data->set_current;
+    units[0] = "V Iset:";
+    units[1] = "A";
+    precisions[0] = 2;
+    precisions[1] = 1;
     if(data->load_settings.load_work_mode == BatteryDischarge)
     {
         if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[4].Text, "Vdis:%0.2fV Iset:%0.1fA", data->load_settings.discharge_voltage, data->set_current);
+        	precisions[1] = 1;
         }
         else
         {
-            sprintf(wnd->strings[4].Text, "Vdis:%0.2fV Iset:%0.2fA", data->load_settings.discharge_voltage, data->set_current);
+        	precisions[1] = 2;
         }
+        print2str_drv->PrintFloat(wnd->strings[4].Text, vdis_pre_string, params, units, precisions, 2);
     }
     else
     {
         if(data->set_current >= 5.0f)
         {
-            sprintf(wnd->strings[4].Text, "Iset:%0.1fA", data->set_current);
+        	precisions[1] = 1;
         }
         else
         {
-            sprintf(wnd->strings[4].Text, "Iset:%0.2fA", data->set_current);
+        	precisions[1] = 2;
         }
+        print2str_drv->PrintFloat(wnd->strings[4].Text, iset_pre_string, &params[1], &units[1], &precisions[1], 1);
     }
+
 
     wnd->StringsQuantity = 5;
 
@@ -343,7 +366,7 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
             wnd->strings[i].align = AlignLeft;
             wnd->strings[i].font = font6x8;
             wnd->strings[i].inverted = (i == menu_current_item-1)?(Inverted):(NotInverted);
-            sprintf(wnd->strings[i].Text, "%s", items[i]);
+            print2str_drv->PrintString(wnd->strings[i].Text, "", items[i]);
         }
     }
     else
@@ -355,7 +378,7 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
             wnd->strings[i].align = AlignLeft;
             wnd->strings[i].font = font6x8;
             wnd->strings[i].inverted = (i == max_item_per_screen-1)?(Inverted):(NotInverted);
-            sprintf(wnd->strings[i].Text, "%s", items[menu_current_item-max_item_per_screen+i]);
+            print2str_drv->PrintString(wnd->strings[i].Text, "", items[menu_current_item-max_item_per_screen+i]);
         }
     }
     st7565_drv->setWindow(wnd);
@@ -379,6 +402,14 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
     int8_t ramp_lengths_num = sizeof(ramp_lengths)/2;
     int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
     float step = 0.05f;
+
+    const char* mode_lbl = "Mode:";
+    const char* vdisch_lbl = "Vdisch:";
+    const char* ramp_lbl = "Ramp:";
+    const char* back_lbl = "  < Back   ";
+    const char* delim_volt = " V";
+    const char* delim_ms = " ms";
+    int precision = 2;
 
     // get ramp length counter from saved value
     for(uint8_t i = 0; i < ramp_lengths_num; i++)
@@ -476,14 +507,14 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    sprintf(wnd->strings[0].Text, "Mode:");
+    print2str_drv->PrintString(wnd->strings[0].Text, "", mode_lbl);
 
     wnd->strings[1].x_pos = 50;
     wnd->strings[1].y_pos = 5;
     wnd->strings[1].align = AlignCenter;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = mode_current_item == 1 ? Inverted : NotInverted;
-    sprintf(wnd->strings[1].Text, "%s", modes[data->load_settings.load_work_mode]);
+    print2str_drv->PrintString(wnd->strings[1].Text, "", modes[data->load_settings.load_work_mode]);
 
     if(data->load_settings.load_work_mode == BatteryDischarge)
     {
@@ -492,14 +523,14 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignLeft;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = NotInverted;
-        sprintf(wnd->strings[2].Text, "Vdisch:");
+        print2str_drv->PrintString(wnd->strings[2].Text, "", vdisch_lbl);
 
         wnd->strings[3].x_pos = 50;
         wnd->strings[3].y_pos = 15;
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
-        sprintf(wnd->strings[3].Text, "%0.2f V", data->load_settings.discharge_voltage);
+        print2str_drv->PrintFloat(wnd->strings[3].Text, "", &data->load_settings.discharge_voltage, &delim_volt, &precision, 1);
 
 
         wnd->strings[4].x_pos = 0;
@@ -507,7 +538,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        sprintf(wnd->strings[4].Text, "  < Back    ");
+        print2str_drv->PrintString(wnd->strings[4].Text, "", back_lbl);
 
         wnd->StringsQuantity = 5;
     }
@@ -518,21 +549,21 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignLeft;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = NotInverted;
-        sprintf(wnd->strings[2].Text, "Ramp:");
+        print2str_drv->PrintString(wnd->strings[2].Text, "", ramp_lbl);
 
         wnd->strings[3].x_pos = 50;
         wnd->strings[3].y_pos = 15;
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
-        sprintf(wnd->strings[3].Text, "%d ms", data->load_settings.current_ramp_time);
+        print2str_drv->PrintInteger(wnd->strings[3].Text, "", (int*)&data->load_settings.current_ramp_time, &delim_ms, 1);
 
         wnd->strings[4].x_pos = 0;
         wnd->strings[4].y_pos = 55;
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        sprintf(wnd->strings[4].Text, "  < Back    ");
+        print2str_drv->PrintString(wnd->strings[4].Text, "", back_lbl);
 
         wnd->StringsQuantity = 5;
     }
@@ -543,7 +574,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignCenter;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        sprintf(wnd->strings[2].Text, "  < Back    ");
+        print2str_drv->PrintString(wnd->strings[2].Text, "", back_lbl);
 
         wnd->StringsQuantity = 3;
     }
@@ -561,10 +592,12 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
   */
 static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* max_power_space[3] = {" \0", "  \0", "   \0"};
+    const char* max_power_space[3] = {" W\0", "  W\0", "   W\0"};
+    const char* ok_btn_lbl = "   Ok   ";
     int index = 2;
     int steps_num = 0;
     float step = 0.01f;
+    int max_power = 0;
 
     switch(item_action)
     {
@@ -624,21 +657,22 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    sprintf(wnd->strings[0].Text, "Max power = %sW", max_power_space[index]);
+    print2str_drv->PrintString(wnd->strings[0].Text, "Max power = ", max_power_space[index]);
 
     wnd->strings[1].x_pos = 85;
     wnd->strings[1].y_pos = 25;
     wnd->strings[1].align = AlignLeft;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = Inverted;
-    sprintf(wnd->strings[1].Text, "%d", data->load_settings.max_power);
+    max_power = data->load_settings.max_power;
+    print2str_drv->PrintInteger(wnd->strings[1].Text, "", &max_power, NULL, 1);
 
     wnd->strings[2].x_pos = 0;
     wnd->strings[2].y_pos = 55;
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = font6x8;
     wnd->strings[2].inverted = Inverted;
-    sprintf(wnd->strings[2].Text, "   Ok   ");
+    print2str_drv->PrintString(wnd->strings[2].Text, "", ok_btn_lbl);
 
     wnd->StringsQuantity = 3;
 
@@ -655,9 +689,15 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
   */
 static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* modes[2]  = {"Current\0","Voltage\0"};
+    const char* modes[2]  = {"Current calibration\0","Voltage calibration\0"};
     const char* refs[6] = {"0,1A", "1A", " 5A", "2V", "10V", "25V"};
+    const char* ok_btn_lbl = "   Ok   ";
+    const char* yes_btn_lbl = "Yes";
+    const char* no_btn_lbl = "No";
+    const char* set_lbl = "Set:";
     int calibration_items_num = 7;
+    static int save_calibration_data_item;
+    int read_coeff_value = 0;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
 
     // enable load
@@ -680,8 +720,17 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             if(++calibration_current_item > calibration_items_num)
             {
                 calibration_current_item = 1;
-                // save calibration data
-                load_control_drv->saveCalibrationData(&data->calibration_data);
+                // save or not calibration data
+                if(save_calibration_data_item == 0)
+                {
+                	// save calibration data
+                	load_control_drv->saveCalibrationData(&data->calibration_data);
+                }
+                else
+                {
+                	// else restore loadData from EEPROM
+                	load_control_drv->readCalibrationData();
+                }
                 return 0;
             }
             else if(calibration_current_item < 4)
@@ -708,6 +757,10 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
                 calibration_data_ptr[calibration_current_item - 1]++;
                 load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
+            else if(calibration_current_item == calibration_items_num)
+            {
+            	if(++save_calibration_data_item > 1) save_calibration_data_item = 0;
+            }
             break;
 
         case Prev:
@@ -716,39 +769,43 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
                 calibration_data_ptr[calibration_current_item - 1]--;
                 load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
             }
+            else if(calibration_current_item == calibration_items_num)
+            {
+            	if(--save_calibration_data_item < 0) save_calibration_data_item = 1;
+            }
             break;
     }
 
-    wnd->strings[0].x_pos = 0;
-    wnd->strings[0].y_pos = 5;
-    wnd->strings[0].align = AlignCenter;
-    wnd->strings[0].font = font6x8;
-    wnd->strings[0].inverted = NotInverted;
-
     if(calibration_current_item < 4)
     {
-        sprintf(wnd->strings[0].Text, "%s calibration", modes[(calibration_current_item-1)>>2]);
+        wnd->strings[0].x_pos = 0;
+        wnd->strings[0].y_pos = 5;
+        wnd->strings[0].align = AlignCenter;
+        wnd->strings[0].font = font6x8;
+        wnd->strings[0].inverted = NotInverted;
+    	print2str_drv->PrintString(wnd->strings[0].Text, "", modes[(calibration_current_item-1)>>2]);
 
         wnd->strings[1].x_pos = 0;
         wnd->strings[1].y_pos = 18;
         wnd->strings[1].align = AlignCenter;
         wnd->strings[1].font = font6x8;
         wnd->strings[1].inverted = NotInverted;
-        sprintf(wnd->strings[1].Text, "Set current %s", refs[calibration_current_item-1]);
+        print2str_drv->PrintString(wnd->strings[1].Text, "Set current ", refs[calibration_current_item-1]);
 
         wnd->strings[2].x_pos = 40;
 		wnd->strings[2].y_pos = 28;
 		wnd->strings[2].align = AlignLeft;
 		wnd->strings[2].font = font6x8;
 		wnd->strings[2].inverted = NotInverted;
-		sprintf(wnd->strings[2].Text, "Set:");
+		print2str_drv->PrintString(wnd->strings[2].Text, "", set_lbl);
 
         wnd->strings[3].x_pos = 40;
         wnd->strings[3].y_pos = 28;
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = Inverted;
-        sprintf(wnd->strings[3].Text, "%d", calibration_data_ptr[calibration_current_item - 1]);
+        read_coeff_value = calibration_data_ptr[calibration_current_item - 1];
+        print2str_drv->PrintInteger(wnd->strings[3].Text, "", &read_coeff_value, NULL, 1);
 
         wnd->strings[4].x_pos = 0;
         wnd->strings[4].y_pos = 38;
@@ -756,14 +813,15 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = NotInverted;
         calibration_data_ptr[calibration_current_item + 2] = data->measured_current_raw;
-        sprintf(wnd->strings[4].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
+        read_coeff_value = calibration_data_ptr[calibration_current_item + 2];
+        print2str_drv->PrintInteger(wnd->strings[4].Text, "Read: ", &read_coeff_value, NULL, 1);
 
         wnd->strings[5].x_pos = 0;
 		wnd->strings[5].y_pos = 55;
 		wnd->strings[5].align = AlignCenter;
 		wnd->strings[5].font = font6x8;
 		wnd->strings[5].inverted = Inverted;
-		sprintf(wnd->strings[5].Text, "   Ok   ");
+		print2str_drv->PrintString(wnd->strings[5].Text, "", ok_btn_lbl);
 
         wnd->StringsQuantity = 6;
     }
@@ -771,32 +829,51 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
     {
         if(calibration_current_item == calibration_items_num)
         {
+            wnd->strings[0].x_pos = 0;
+            wnd->strings[0].y_pos = 18;
+            wnd->strings[0].align = AlignCenter;
+            wnd->strings[0].font = font6x8;
+            wnd->strings[0].inverted = NotInverted;
+            print2str_drv->PrintString(wnd->strings[0].Text, "", "Calibration is ended");
+
             wnd->strings[1].x_pos = 0;
-            wnd->strings[1].y_pos = 25;
+            wnd->strings[1].y_pos = 28;
             wnd->strings[1].align = AlignCenter;
             wnd->strings[1].font = font6x8;
             wnd->strings[1].inverted = NotInverted;
-            sprintf(wnd->strings[1].Text, "Calibration is ended");
+            print2str_drv->PrintString(wnd->strings[1].Text, "", "Save data?");
 
-            wnd->strings[2].x_pos = 0;
+            wnd->strings[2].x_pos = 25;
             wnd->strings[2].y_pos = 55;
-            wnd->strings[2].align = AlignCenter;
+            wnd->strings[2].align = AlignLeft;
             wnd->strings[2].font = font6x8;
-            wnd->strings[2].inverted = Inverted;
-            sprintf(wnd->strings[2].Text, "   Save   ");
+            wnd->strings[2].inverted = save_calibration_data_item == 0 ? Inverted : NotInverted;
+            print2str_drv->PrintString(wnd->strings[2].Text, "", yes_btn_lbl);
 
-            wnd->StringsQuantity = 3;
+            wnd->strings[3].x_pos = 90;
+            wnd->strings[3].y_pos = 55;
+            wnd->strings[3].align = AlignLeft;
+            wnd->strings[3].font = font6x8;
+            wnd->strings[3].inverted = save_calibration_data_item == 1 ? Inverted : NotInverted;
+            print2str_drv->PrintString(wnd->strings[3].Text, "", no_btn_lbl);
+
+            wnd->StringsQuantity = 4;
         }
         else
         {
-            sprintf(wnd->strings[0].Text, "%s calibration", modes[calibration_current_item>>2]);
+            wnd->strings[0].x_pos = 0;
+            wnd->strings[0].y_pos = 5;
+            wnd->strings[0].align = AlignCenter;
+            wnd->strings[0].font = font6x8;
+            wnd->strings[0].inverted = NotInverted;
+        	print2str_drv->PrintString(wnd->strings[0].Text, "", modes[calibration_current_item>>2]);
 
             wnd->strings[1].x_pos = 0;
             wnd->strings[1].y_pos = 18;
             wnd->strings[1].align = AlignCenter;
             wnd->strings[1].font = font6x8;
             wnd->strings[1].inverted = NotInverted;
-            sprintf(wnd->strings[1].Text, "Set voltage %s", refs[calibration_current_item-1]);
+            print2str_drv->PrintString(wnd->strings[1].Text, "Set voltage ", refs[calibration_current_item-1]);
 
             wnd->strings[2].x_pos = 0;
             wnd->strings[2].y_pos = 28;
@@ -804,14 +881,15 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = NotInverted;
             calibration_data_ptr[calibration_current_item + 2] = data->voltage_raw;
-            sprintf(wnd->strings[2].Text, "Read: %d", calibration_data_ptr[calibration_current_item + 2]);
+            read_coeff_value = calibration_data_ptr[calibration_current_item + 2];
+            print2str_drv->PrintInteger(wnd->strings[2].Text, "Read: ", &read_coeff_value, NULL, 1);
 
             wnd->strings[3].x_pos = 0;
             wnd->strings[3].y_pos = 55;
             wnd->strings[3].align = AlignCenter;
             wnd->strings[3].font = font6x8;
             wnd->strings[3].inverted = Inverted;
-            sprintf(wnd->strings[3].Text, "   Ok   ");
+            print2str_drv->PrintString(wnd->strings[3].Text, "", ok_btn_lbl);
 
             wnd->StringsQuantity = 4;
         }
@@ -830,6 +908,10 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
   */
 static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
+	const char* ok_btn_lbl = "   Ok   ";
+	const char* unit_volt = " B";
+	int precision = 2;
+
     switch(item_action)
     {
         case NoAction:
@@ -847,14 +929,14 @@ static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Actio
     wnd->strings[0].align = AlignCenter;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    sprintf(wnd->strings[0].Text, "Vbat = %0.2f B", data->vbat);
+    print2str_drv->PrintFloat(wnd->strings[0].Text, "Vbat = ", &data->vbat, &unit_volt, &precision, 1);
 
     wnd->strings[1].x_pos = 0;
     wnd->strings[1].y_pos = 55;
     wnd->strings[1].align = AlignCenter;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = Inverted;
-    sprintf(wnd->strings[1].Text, "   Ok   ");
+    print2str_drv->PrintString(wnd->strings[1].Text, "", ok_btn_lbl);
 
     wnd->StringsQuantity = 2;
 
@@ -871,6 +953,10 @@ static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Actio
   */
 static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
+	const char* contrast_lbl = "Contrast:";
+	const char* ok_btn_lbl = "   Ok   ";
+	int contrast = 0;
+
     switch(item_action)
     {
         case NoAction:
@@ -908,21 +994,22 @@ static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Actio
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    sprintf(wnd->strings[0].Text, "Contrast:");
+    print2str_drv->PrintString(wnd->strings[0].Text, "", contrast_lbl);
 
     wnd->strings[1].x_pos = 80;
     wnd->strings[1].y_pos = 25;
     wnd->strings[1].align = AlignLeft;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = Inverted;
-    sprintf(wnd->strings[1].Text, "%d", data->load_settings.display_contrast);
+    contrast = data->load_settings.display_contrast;
+    print2str_drv->PrintInteger(wnd->strings[1].Text, "", &contrast, NULL, 1);
 
     wnd->strings[2].x_pos = 0;
     wnd->strings[2].y_pos = 55;
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = font6x8;
     wnd->strings[2].inverted = Inverted;
-    sprintf(wnd->strings[2].Text, "   Ok   ");
+    print2str_drv->PrintString(wnd->strings[2].Text, "", ok_btn_lbl);
 
     wnd->StringsQuantity = 3;
 

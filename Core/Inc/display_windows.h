@@ -11,7 +11,7 @@
 #include "main.h"
 #include "fonts.h"
 #include "st7565.h"
-#include <string.h>
+#include "print_to_string.h"
 
 #define SETTINGS_ITEMS_NUM          6
 

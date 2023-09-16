@@ -76,6 +76,8 @@ typedef struct
 typedef struct
 {
 	void (*loadInit)(void);
+	void (*readCalibrationData)(void);
+	void (*readSettingsData)(void);
 	void (*setCurrentInDiscreets)(uint16_t val);
 	void (*setCurrentInAmperes)(float val);
 	void (*setEnabled)(uint8_t state);

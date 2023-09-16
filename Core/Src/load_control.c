@@ -12,6 +12,8 @@
 
 // driver functions
 static void loadInit(void);
+static void readCalibrationData(void);
+static void readSettingsData(void);
 static void setCurrentInDiscretes(uint16_t val);
 static void setCurrentInAmperes(float val);
 static void setEnabled(uint8_t state);
@@ -34,6 +36,8 @@ static float calcVoltage(uint16_t adc_val);
 
 LoadController lc_driver = {
 		loadInit,
+		readCalibrationData,
+		readSettingsData,
 		setCurrentInDiscretes,
 		setCurrentInAmperes,
 		setEnabled,
@@ -72,16 +76,10 @@ Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 
 static void loadInit(void)
 {
 	// read calibration data, if it was saved
-	if((*(__IO uint32_t *)EEPROM_CAL_DATA_ADDR) == IS_EEPROM_WRITTEN_SIGN)
-	{
-		memcpy(&loadData.calibration_data, (uint8_t*)EEPROM_CAL_DATA_ADDR+4, sizeof(CalibrationData));
-	}
+	readCalibrationData();
 
 	// read load settings data, if it was saved
-	if((*(__IO uint32_t *)EEPROM_LOAD_SET_ADDR) == IS_EEPROM_WRITTEN_SIGN)
-	{
-		memcpy(&loadData.load_settings, (uint8_t*)EEPROM_LOAD_SET_ADDR+4, sizeof(LoadSettings));
-	}
+	readSettingsData();
 
 	// start DAC
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
@@ -93,6 +91,32 @@ static void loadInit(void)
 
 	// init DS18B20 temperature sensor
 	ds18b20_drv->Init(&huart1);
+}
+
+/**
+  * @brief  Read load calibration data from EEPROM memory
+  * @param  none
+  * @retval none
+  */
+static void readCalibrationData(void)
+{
+	if((*(__IO uint32_t *)EEPROM_CAL_DATA_ADDR) == IS_EEPROM_WRITTEN_SIGN)
+	{
+		memcpy(&loadData.calibration_data, (uint8_t*)EEPROM_CAL_DATA_ADDR+4, sizeof(CalibrationData));
+	}
+}
+
+/**
+  * @brief  Read load settings data from EEPROM memory
+  * @param  none
+  * @retval none
+  */
+static void readSettingsData(void)
+{
+	if((*(__IO uint32_t *)EEPROM_LOAD_SET_ADDR) == IS_EEPROM_WRITTEN_SIGN)
+	{
+		memcpy(&loadData.load_settings, (uint8_t*)EEPROM_LOAD_SET_ADDR+4, sizeof(LoadSettings));
+	}
 }
 
 /**
@@ -398,7 +422,7 @@ static void fanSpeedControl(void)
 static void setDacValue(uint16_t val)
 {
 	uint16_t delta_val = ABS(val - loadData.set_current_raw);
-	uint16_t delta_samples = sizeof(rampVals)/2-1;
+	uint16_t delta_samples = loadData.load_settings.current_ramp_time;
 	int16_t y = 0, yinc1 = 0, yinc2 = 0, den = 0, num = 0, numadd = 0, mul = 0;
 
 	if(val == loadData.set_current_raw) return;
@@ -451,7 +475,7 @@ static void setDacValue(uint16_t val)
 		}
 		rampVals[delta_samples] = val;
 		// write ramp values to DAC
-		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*)rampVals, 500, DAC_ALIGN_12B_R);
+		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*)rampVals, delta_samples+1, DAC_ALIGN_12B_R);
 	}
 	else
 	{
