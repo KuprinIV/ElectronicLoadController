@@ -6,6 +6,7 @@
  */
 #include "load_control.h"
 #include "st7565.h"
+#include "fir_filter.h"
 #include <string.h>
 
 #define ABS(x) (x) >= 0 ? (x):(-x)
@@ -67,6 +68,10 @@ static uint16_t rampVals[101] = {0};
 
 Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
+
+// init FIR filters data structs
+FIR_FilterData fir_LP_voltage = {131072, {-396, 66, 1472, 4405, 9298, 15889, 22277, 25044,22277, 15889, 9298, 4405, 1472, 66, -396}, {0}};
+FIR_FilterData fir_LP_current = {131072, {-396, 66, 1472, 4405, 9298, 15889, 22277, 25044,22277, 15889, 9298, 4405, 1472, 66, -396}, {0}};
 
 /**
   * @brief  Electronic load control initialization
@@ -287,10 +292,10 @@ static void calcMeasuredParams(void)
 	loadData.measured_current_raw = adc_averaged_data[3];
 	loadData.voltage_raw = (adc_averaged_data[4]);
 
-	loadData.measured_current = calcCurrent2Float(adc_averaged_data[3]);
+	loadData.measured_current = calcCurrent2Float(doFirFilter(&fir_LP_current, adc_averaged_data[3]));
 	if(loadData.measured_current < 0.0f) loadData.measured_current = 0.0f;
 
-	loadData.voltage = calcVoltage(adc_averaged_data[4]);
+	loadData.voltage = calcVoltage(doFirFilter(&fir_LP_voltage, adc_averaged_data[4]));
 	if(loadData.voltage < 0.0f) loadData.voltage = 0.0f;
 
 	// calc mAh and Wh
@@ -594,6 +599,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	static uint32_t uwIC2Value1 = 0;
 	static uint32_t uwIC2Value2 = 0;
 	static uint32_t uwDiffCapture = 0;
+	static uint32_t rpm_averaged = 0;
+	static uint16_t average_tick = 0;
 
 	/* Capture index */
 	static uint16_t uhCaptureIndex = 0;
@@ -651,7 +658,18 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			uhCaptureIndex = 0;
 		}
 		/* Frequency computation: for this example TIMx (TIM1) is clocked by APB1Clk */
-		loadData.rpm = 19200000/uwDiffCapture;
+		if(average_tick < FAN_SPEED_AVG_TICKS)
+		{
+			rpm_averaged += 19200000/uwDiffCapture;
+			average_tick++;
+		}
+		else
+		{
+			loadData.rpm = (uint16_t)rpm_averaged/FAN_SPEED_AVG_TICKS;
+			rpm_averaged = 0;
+			average_tick = 0;
+		}
+
 		uwDiffCapture = 0;
 		rpm_cntr = 0;
 	}

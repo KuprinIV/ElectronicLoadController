@@ -834,7 +834,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[0].align = AlignCenter;
             wnd->strings[0].font = font6x8;
             wnd->strings[0].inverted = NotInverted;
-            print2str_drv->PrintString(wnd->strings[0].Text, "", "Calibration is ended");
+            print2str_drv->PrintString(wnd->strings[0].Text, "", "Calibration is over");
 
             wnd->strings[1].x_pos = 0;
             wnd->strings[1].y_pos = 28;

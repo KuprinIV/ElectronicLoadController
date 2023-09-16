@@ -20,6 +20,7 @@
 #define POWER_OFF_TICKS			30
 #define TEMP_UPDATE_TICKS		20
 #define FAN_SPEED_CTRL_TICKS	200
+#define FAN_SPEED_AVG_TICKS		10
 
 typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
 
