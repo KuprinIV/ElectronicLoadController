@@ -21,6 +21,7 @@ typedef struct
 	void (*goToNextWindowOrItem)(void);
 	void (*updateWindowParameters)(Action encoder_offset_action);
 	void (*refreshWindow)(void);
+	void (*drawBatteryDischargedMsgBox)(void);
 }DisplayWndCtrl;
 
 extern DisplayWndCtrl* display_wnd_ctrl;

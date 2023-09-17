@@ -11,6 +11,7 @@ static void windowsInit(void);
 static void goToNextWindowOrItem(void);
 static void updateWindowParameters(Action encoder_offset_action);
 static void refreshWindow(void);
+static void drawBatteryDischargedMsgBox(void);
 
 // callbacks
 static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action value_action);
@@ -20,6 +21,7 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
 static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action);
 static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action);
 static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Action value_action);
+static int BatteryDischargeWindow(pWindow wnd, pData data,Action item_action, Action value_action);
 
 // inner functions
 static float GetCurrentChangeStep(float current);
@@ -29,6 +31,7 @@ DisplayWndCtrl drv = {
 		goToNextWindowOrItem,
 		updateWindowParameters,
 		refreshWindow,
+		drawBatteryDischargedMsgBox
 };
 DisplayWndCtrl* display_wnd_ctrl = &drv;
 
@@ -36,8 +39,11 @@ DisplayWndCtrl* display_wnd_ctrl = &drv;
 static Window MenuWnd;
 static Window DispMainWnd;
 static Window SetupWnds[5];
+static Window BatteryDischargedMsgBox;
+
 static pWindow CurrentWnd = &DispMainWnd;
 static pWindow temp_wnd;
+
 static uint8_t level = 0;
 
 extern Data loadData;
@@ -45,6 +51,7 @@ extern Data loadData;
 static uint32_t mode_current_item = 1;
 static uint32_t calibration_current_item = 1;
 static uint32_t menu_current_item = 1;
+static uint8_t is_message_box_shown = 0;
 
 /**
   * @brief  Initialize interface windows
@@ -60,6 +67,7 @@ static void windowsInit(void)
 	// init windows
 	DispMainWnd.callback = &DisplayMainWindow;
 	MenuWnd.callback = &SetMenuWindow;
+	BatteryDischargedMsgBox.callback = &BatteryDischargeWindow;
 
 	SetupWnds[0].callback = &SetupModeWindow;
 	SetupWnds[1].callback = &SetupMaxPowerWindow;
@@ -83,45 +91,56 @@ static void goToNextWindowOrItem(void)
 	// clear display buffer data
 	st7565_drv->clearBuffer();
 
-	switch(level)
+	if(is_message_box_shown)
 	{
-		case 0:
-			temp_wnd = CurrentWnd;
-			CurrentWnd = &MenuWnd;
-			CurrentWnd->prev = temp_wnd;
-			CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-			level++;
-			break;
-
-		case 1:
-			if(menu_current_item == SETTINGS_ITEMS_NUM)
-			{
-				// save load setting in EEPROM
-				load_control_drv->saveLoadSettings(&loadData.load_settings);
-				// show main window
-				CurrentWnd = CurrentWnd->prev;
-				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-				menu_current_item = 1;
-				level--;
-			}
-			else
-			{
+		// reset flag
+		is_message_box_shown = 0;
+		// show previous window
+		CurrentWnd = CurrentWnd->prev;
+		CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+	}
+	else
+	{
+		switch(level)
+		{
+			case 0:
 				temp_wnd = CurrentWnd;
-				CurrentWnd = &(SetupWnds[menu_current_item-1]);
+				CurrentWnd = &MenuWnd;
 				CurrentWnd->prev = temp_wnd;
 				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
 				level++;
-			}
-			break;
+				break;
 
-		case 2:
-			if(CurrentWnd->callback(CurrentWnd,&loadData,Next,NoAction) == 0)
-			{
-				level--;
-				CurrentWnd = CurrentWnd->prev;
-				CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
-			}
-			break;
+			case 1:
+				if(menu_current_item == SETTINGS_ITEMS_NUM)
+				{
+					// save load setting in EEPROM
+					load_control_drv->saveLoadSettings(&loadData.load_settings);
+					// show main window
+					CurrentWnd = CurrentWnd->prev;
+					CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+					menu_current_item = 1;
+					level--;
+				}
+				else
+				{
+					temp_wnd = CurrentWnd;
+					CurrentWnd = &(SetupWnds[menu_current_item-1]);
+					CurrentWnd->prev = temp_wnd;
+					CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+					level++;
+				}
+				break;
+
+			case 2:
+				if(CurrentWnd->callback(CurrentWnd,&loadData,Next,NoAction) == 0)
+				{
+					level--;
+					CurrentWnd = CurrentWnd->prev;
+					CurrentWnd->callback(CurrentWnd,&loadData,NoAction,NoAction);
+				}
+				break;
+		}
 	}
 
 	// update display
@@ -167,6 +186,26 @@ static void refreshWindow(void)
 {
 	st7565_drv->clearBuffer();
 	CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
+	st7565_drv->updateBuffer();
+}
+
+/**
+  * @brief  Draw battery discharged message box window
+  * @param  none
+  * @retval none
+  */
+static void drawBatteryDischargedMsgBox(void)
+{
+	st7565_drv->clearBuffer();
+
+	// set flag
+	is_message_box_shown = 1;
+
+	temp_wnd = CurrentWnd;
+	CurrentWnd = &BatteryDischargedMsgBox;
+	CurrentWnd->prev = temp_wnd;
+	CurrentWnd->callback(CurrentWnd, &loadData, NoAction, NoAction);
+
 	st7565_drv->updateBuffer();
 }
 
@@ -403,10 +442,6 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
     int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
     float step = 0.05f;
 
-    const char* mode_lbl = "Mode:";
-    const char* vdisch_lbl = "Vdisch:";
-    const char* ramp_lbl = "Ramp:";
-    const char* back_lbl = "  < Back   ";
     const char* delim_volt = " V";
     const char* delim_ms = " ms";
     int precision = 2;
@@ -507,7 +542,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    print2str_drv->PrintString(wnd->strings[0].Text, "", mode_lbl);
+    print2str_drv->PrintString(wnd->strings[0].Text, "", "Mode:");
 
     wnd->strings[1].x_pos = 50;
     wnd->strings[1].y_pos = 5;
@@ -523,7 +558,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignLeft;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = NotInverted;
-        print2str_drv->PrintString(wnd->strings[2].Text, "", vdisch_lbl);
+        print2str_drv->PrintString(wnd->strings[2].Text, "", "Vdisch:");
 
         wnd->strings[3].x_pos = 50;
         wnd->strings[3].y_pos = 15;
@@ -538,7 +573,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        print2str_drv->PrintString(wnd->strings[4].Text, "", back_lbl);
+        print2str_drv->PrintString(wnd->strings[4].Text, "", "  < Back   ");
 
         wnd->StringsQuantity = 5;
     }
@@ -549,7 +584,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignLeft;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = NotInverted;
-        print2str_drv->PrintString(wnd->strings[2].Text, "", ramp_lbl);
+        print2str_drv->PrintString(wnd->strings[2].Text, "", "Ramp:");
 
         wnd->strings[3].x_pos = 50;
         wnd->strings[3].y_pos = 15;
@@ -563,7 +598,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[4].align = AlignCenter;
         wnd->strings[4].font = font6x8;
         wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        print2str_drv->PrintString(wnd->strings[4].Text, "", back_lbl);
+        print2str_drv->PrintString(wnd->strings[4].Text, "", "  < Back   ");
 
         wnd->StringsQuantity = 5;
     }
@@ -574,7 +609,7 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
         wnd->strings[2].align = AlignCenter;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        print2str_drv->PrintString(wnd->strings[2].Text, "", back_lbl);
+        print2str_drv->PrintString(wnd->strings[2].Text, "", "  < Back   ");
 
         wnd->StringsQuantity = 3;
     }
@@ -593,7 +628,6 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
 static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* max_power_space[3] = {" W\0", "  W\0", "   W\0"};
-    const char* ok_btn_lbl = "   Ok   ";
     int index = 2;
     int steps_num = 0;
     float step = 0.01f;
@@ -672,7 +706,7 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = font6x8;
     wnd->strings[2].inverted = Inverted;
-    print2str_drv->PrintString(wnd->strings[2].Text, "", ok_btn_lbl);
+    print2str_drv->PrintString(wnd->strings[2].Text, "", "   Ok   ");
 
     wnd->StringsQuantity = 3;
 
@@ -691,10 +725,6 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
 {
     const char* modes[2]  = {"Current calibration\0","Voltage calibration\0"};
     const char* refs[6] = {"0,1A", "1A", " 5A", "2V", "10V", "25V"};
-    const char* ok_btn_lbl = "   Ok   ";
-    const char* yes_btn_lbl = "Yes";
-    const char* no_btn_lbl = "No";
-    const char* set_lbl = "Set:";
     int calibration_items_num = 7;
     static int save_calibration_data_item;
     int read_coeff_value = 0;
@@ -798,7 +828,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
 		wnd->strings[2].align = AlignLeft;
 		wnd->strings[2].font = font6x8;
 		wnd->strings[2].inverted = NotInverted;
-		print2str_drv->PrintString(wnd->strings[2].Text, "", set_lbl);
+		print2str_drv->PrintString(wnd->strings[2].Text, "", "Set:");
 
         wnd->strings[3].x_pos = 40;
         wnd->strings[3].y_pos = 28;
@@ -822,7 +852,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
 		wnd->strings[5].align = AlignCenter;
 		wnd->strings[5].font = font6x8;
 		wnd->strings[5].inverted = Inverted;
-		print2str_drv->PrintString(wnd->strings[5].Text, "", ok_btn_lbl);
+		print2str_drv->PrintString(wnd->strings[5].Text, "", "   Ok   ");
 
         wnd->StringsQuantity = 6;
     }
@@ -849,14 +879,14 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[2].align = AlignLeft;
             wnd->strings[2].font = font6x8;
             wnd->strings[2].inverted = save_calibration_data_item == 0 ? Inverted : NotInverted;
-            print2str_drv->PrintString(wnd->strings[2].Text, "", yes_btn_lbl);
+            print2str_drv->PrintString(wnd->strings[2].Text, "", "Yes");
 
             wnd->strings[3].x_pos = 90;
             wnd->strings[3].y_pos = 55;
             wnd->strings[3].align = AlignLeft;
             wnd->strings[3].font = font6x8;
             wnd->strings[3].inverted = save_calibration_data_item == 1 ? Inverted : NotInverted;
-            print2str_drv->PrintString(wnd->strings[3].Text, "", no_btn_lbl);
+            print2str_drv->PrintString(wnd->strings[3].Text, "", "No");
 
             wnd->StringsQuantity = 4;
         }
@@ -890,7 +920,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
             wnd->strings[3].align = AlignCenter;
             wnd->strings[3].font = font6x8;
             wnd->strings[3].inverted = Inverted;
-            print2str_drv->PrintString(wnd->strings[3].Text, "", ok_btn_lbl);
+            print2str_drv->PrintString(wnd->strings[3].Text, "", "   Ok   ");
 
             wnd->StringsQuantity = 4;
         }
@@ -909,7 +939,6 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
   */
 static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-	const char* ok_btn_lbl = "   Ok   ";
 	const char* unit_volt = " B";
 	int precision = 2;
 
@@ -937,7 +966,7 @@ static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Actio
     wnd->strings[1].align = AlignCenter;
     wnd->strings[1].font = font6x8;
     wnd->strings[1].inverted = Inverted;
-    print2str_drv->PrintString(wnd->strings[1].Text, "", ok_btn_lbl);
+    print2str_drv->PrintString(wnd->strings[1].Text, "", "   Ok   ");
 
     wnd->StringsQuantity = 2;
 
@@ -954,8 +983,6 @@ static int SetupBatteryWindow(pWindow wnd, pData data, Action item_action, Actio
   */
 static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-	const char* contrast_lbl = "Contrast:";
-	const char* ok_btn_lbl = "   Ok   ";
 	int contrast = 0;
 
     switch(item_action)
@@ -995,7 +1022,7 @@ static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Actio
     wnd->strings[0].align = AlignLeft;
     wnd->strings[0].font = font6x8;
     wnd->strings[0].inverted = NotInverted;
-    print2str_drv->PrintString(wnd->strings[0].Text, "", contrast_lbl);
+    print2str_drv->PrintString(wnd->strings[0].Text, "", "Contrast:");
 
     wnd->strings[1].x_pos = 80;
     wnd->strings[1].y_pos = 25;
@@ -1010,9 +1037,66 @@ static int SetupDisplayWindow(pWindow wnd, pData data, Action item_action, Actio
     wnd->strings[2].align = AlignCenter;
     wnd->strings[2].font = font6x8;
     wnd->strings[2].inverted = Inverted;
-    print2str_drv->PrintString(wnd->strings[2].Text, "", ok_btn_lbl);
+    print2str_drv->PrintString(wnd->strings[2].Text, "", "   Ok   ");
 
     wnd->StringsQuantity = 3;
+
+    st7565_drv->setWindow(wnd);
+    return 1;
+}
+
+/**
+  * @brief  Callback function for drawing battery discharged message window
+  * @param  wnd - data structure with window parameters
+  * @param  data - data structure with electronic load parameters
+  * @param  item_action: NoAction - do nothing, Next - go to the next item, Prev - go to previous item
+  * @retval 0 - after window drawing go to previous window, 1 - after window drawing stay in it
+  */
+static int BatteryDischargeWindow(pWindow wnd, pData data,Action item_action, Action value_action)
+{
+    switch(item_action)
+    {
+        case NoAction:
+        case Prev:
+        default:
+            break;
+
+        case Next:
+            return 0;
+            break;
+    }
+
+    st7565_drv->drawMessageBoxTemplate();
+
+    wnd->strings[0].x_pos = 0;
+    wnd->strings[0].y_pos = 13;
+    wnd->strings[0].align = AlignCenter;
+    wnd->strings[0].font = font6x8;
+    wnd->strings[0].inverted = NotInverted;
+    print2str_drv->PrintString(wnd->strings[0].Text, "", "Battery");
+
+    wnd->strings[1].x_pos = 0;
+    wnd->strings[1].y_pos = 22;
+    wnd->strings[1].align = AlignCenter;
+    wnd->strings[1].font = font6x8;
+    wnd->strings[1].inverted = NotInverted;
+    print2str_drv->PrintString(wnd->strings[1].Text, "", "discharge");
+
+    wnd->strings[2].x_pos = 0;
+    wnd->strings[2].y_pos = 31;
+    wnd->strings[2].align = AlignCenter;
+    wnd->strings[2].font = font6x8;
+    wnd->strings[2].inverted = NotInverted;
+    print2str_drv->PrintString(wnd->strings[2].Text, "", "is over");
+
+    wnd->strings[3].x_pos = 0;
+    wnd->strings[3].y_pos = 44;
+    wnd->strings[3].align = AlignCenter;
+    wnd->strings[3].font = font6x8;
+    wnd->strings[3].inverted = Inverted;
+    print2str_drv->PrintString(wnd->strings[3].Text, "", "   Ok   ");
+
+    wnd->StringsQuantity = 4;
 
     st7565_drv->setWindow(wnd);
     return 1;

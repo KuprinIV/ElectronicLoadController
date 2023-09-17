@@ -171,10 +171,14 @@ int main(void)
 		  }
 
 		  // check accumulator voltage in Discharge mode
-		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage)
+		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage
+				  && !loadData.is_battery_discharge_detected)
 		  {
+			  loadData.is_battery_discharge_detected = 1;
 			  // if accumulator voltage lower discharge voltage level, reset current
 			  load_control_drv->setEnabled(0);
+			  // show message box
+			  display_wnd_ctrl->drawBatteryDischargedMsgBox();
 		  }
 
 		  // update DS18B20 temperature and check over temperature event

@@ -66,7 +66,7 @@ static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 static uint16_t rampVals[101] = {0};
 
-Data loadData = {0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
+Data loadData = {0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
@@ -162,6 +162,10 @@ static void setEnabled(uint8_t state)
 		loadData.mAh = 0.0f;
 		loadData.Wh = 0.0f;
 
+		// reset battery discharge detected flag
+		loadData.is_battery_discharge_detected = 0;
+
+		// set current value
 		setDacValue(loadData.set_current_raw);
 	}
 	else
@@ -292,10 +296,10 @@ static void calcMeasuredParams(void)
 	loadData.measured_current_raw = adc_averaged_data[3];
 	loadData.voltage_raw = (adc_averaged_data[4]);
 
-	loadData.measured_current = calcCurrent2Float(doFirFilter(&fir_LP_current, adc_averaged_data[3]));
+	loadData.measured_current = calcCurrent2Float(doFirFilter(&fir_LP_current, loadData.measured_current_raw));
 	if(loadData.measured_current < 0.0f) loadData.measured_current = 0.0f;
 
-	loadData.voltage = calcVoltage(doFirFilter(&fir_LP_voltage, adc_averaged_data[4]));
+	loadData.voltage = calcVoltage(doFirFilter(&fir_LP_voltage, loadData.voltage_raw));
 	if(loadData.voltage < 0.0f) loadData.voltage = 0.0f;
 
 	// calc mAh and Wh

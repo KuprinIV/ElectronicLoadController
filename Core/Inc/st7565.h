@@ -100,6 +100,7 @@ typedef struct
 	void (*drawBatteryIndicator)(uint8_t xn, uint8_t yn, uint8_t percentage);
 	void (*drawFanIndicator)(uint8_t xn, uint8_t yn);
 	void (*drawOnOffButton)(uint8_t xn, uint8_t yn, uint8_t state);
+	void (*drawMessageBoxTemplate)(void);
 }ST7565_Drv;
 
 extern ST7565_Drv* st7565_drv;
