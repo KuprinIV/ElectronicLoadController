@@ -70,8 +70,8 @@ Data loadData = {0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {20
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
-FIR_FilterData fir_LP_voltage = {131072, {-396, 66, 1472, 4405, 9298, 15889, 22277, 25044,22277, 15889, 9298, 4405, 1472, 66, -396}, {0}};
-FIR_FilterData fir_LP_current = {131072, {-396, 66, 1472, 4405, 9298, 15889, 22277, 25044,22277, 15889, 9298, 4405, 1472, 66, -396}, {0}};
+FIR_FilterData fir_LP_voltage = {32768, {13, 63, 44, -304, -934, 208, 9066, 16451, 9066, 208, -934, -304, 44, 63, 13}, {0}};
+FIR_FilterData fir_LP_current = {32768, {13, 63, 44, -304, -934, 208, 9066, 16451, 9066, 208, -934, -304, 44, 63, 13}, {0}};
 
 /**
   * @brief  Electronic load control initialization
@@ -280,6 +280,8 @@ static void saveLoadSettings(LoadSettings* ls)
 static void calcMeasuredParams(void)
 {
 	uint32_t adc_averaged_data[5] = {0};
+	int16_t current_filt = 0;
+	int16_t voltage_filt = 0;
 	// calc averaged ADC data
 	for(uint16_t i = 0; i < 5*NUM_OF_SAMPLES; i++)
 	{
@@ -293,13 +295,17 @@ static void calcMeasuredParams(void)
 	loadData.vbat = 0.00168f*adc_averaged_data[0]-0.33f;
 	loadData.vdac0_raw = adc_averaged_data[1];
 	loadData.vref_raw = adc_averaged_data[2];
-	loadData.measured_current_raw = adc_averaged_data[3];
-	loadData.voltage_raw = (adc_averaged_data[4]);
 
-	loadData.measured_current = calcCurrent2Float(doFirFilter(&fir_LP_current, loadData.measured_current_raw));
+	current_filt = doFirFilter(&fir_LP_current, adc_averaged_data[3]);
+	loadData.measured_current_raw = current_filt > 0 ? (uint16_t)current_filt : 0;
+
+	voltage_filt = doFirFilter(&fir_LP_voltage,adc_averaged_data[4]);
+	loadData.voltage_raw = voltage_filt > 0 ? (uint16_t)voltage_filt : 0;
+
+	loadData.measured_current = calcCurrent2Float(loadData.measured_current_raw);
 	if(loadData.measured_current < 0.0f) loadData.measured_current = 0.0f;
 
-	loadData.voltage = calcVoltage(doFirFilter(&fir_LP_voltage, loadData.voltage_raw));
+	loadData.voltage = calcVoltage(loadData.voltage_raw);
 	if(loadData.voltage < 0.0f) loadData.voltage = 0.0f;
 
 	// calc mAh and Wh
