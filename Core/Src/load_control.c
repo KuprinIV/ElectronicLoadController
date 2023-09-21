@@ -175,6 +175,7 @@ static void setEnabled(uint8_t state)
 	else
 	{
 		loadData.set_current_offset = 0.0f;
+		iset_prev = loadData.set_current;
 		setDacValue(0);
 	}
 }
