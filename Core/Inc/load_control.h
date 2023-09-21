@@ -54,6 +54,7 @@ typedef struct
 	uint8_t is_ovt;
 	uint8_t on_state;
 	uint8_t is_battery_discharge_detected;
+	uint8_t is_calibration_mode;
 	// set and measured parameters
 	float set_current;
     float measured_current;

@@ -192,7 +192,7 @@ int main(void)
 		  load_control_drv->fanSpeedControl();
 
 		  // current controller
-		  if(loadData.on_state)
+		  if(loadData.on_state && !loadData.is_calibration_mode)
 		  {
 			  load_control_drv->currentController();
 		  }

@@ -740,12 +740,13 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
     int read_coeff_value = 0;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
 
-    // enable load
-    load_control_drv->setEnabled(1);
-
     switch(item_action)
     {
         case NoAction:
+            // enable load
+            load_control_drv->setEnabled(1);
+            data->is_calibration_mode = 1;
+
             if(calibration_current_item < 4)
             {
                 load_control_drv->setCurrentInDiscreets(calibration_data_ptr[calibration_current_item - 1]);
@@ -770,6 +771,7 @@ static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, A
                 	// else restore loadData from EEPROM
                 	load_control_drv->readCalibrationData();
                 }
+                data->is_calibration_mode = 0;
                 calibration_current_item = 1;
                 save_calibration_data_item = 0;
                 return 0;
