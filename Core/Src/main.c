@@ -190,6 +190,12 @@ int main(void)
 		  }
 		  // fan speed control
 		  load_control_drv->fanSpeedControl();
+
+		  // current controller
+		  if(loadData.on_state)
+		  {
+			  load_control_drv->currentController();
+		  }
 	  }
 
 	  // handle end of ADC data conversion event

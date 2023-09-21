@@ -28,6 +28,7 @@ static uint8_t checkOvertemperature(void);
 static void checkPowerButton(void);
 static void updateTemperatureValue(void);
 static void fanSpeedControl(void);
+static void currentController(void);
 
 // inner functions
 static void setDacValue(uint16_t val);
@@ -51,7 +52,8 @@ LoadController lc_driver = {
 		checkOvertemperature,
 		checkPowerButton,
 		updateTemperatureValue,
-		fanSpeedControl
+		fanSpeedControl,
+		currentController
 };
 LoadController* load_control_drv =  &lc_driver;
 
@@ -65,8 +67,9 @@ static uint16_t encoder_cntr_prev = 32767;
 static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 static uint16_t rampVals[101] = {0};
+static float iset_prev = 0.0f;
 
-Data loadData = {0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
+Data loadData = {0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
@@ -144,6 +147,7 @@ static void setCurrentInDiscretes(uint16_t val)
   */
 static void setCurrentInAmperes(float val)
 {
+	iset_prev = val;
 	uint16_t dac_val = calcCurrent2Discrete(val);
 	setCurrentInDiscretes(dac_val);
 }
@@ -170,6 +174,7 @@ static void setEnabled(uint8_t state)
 	}
 	else
 	{
+		loadData.set_current_offset = 0.0f;
 		setDacValue(0);
 	}
 }
@@ -427,6 +432,24 @@ static void fanSpeedControl(void)
 		}
 		temp_prev = loadData.temperature;
 	}
+}
+
+/**
+  * @brief  Realizes controller for current set
+  * @param  none
+  * @retval none
+  */
+static void currentController(void)
+{
+	static float err_prev;
+	float err = 0.0f, Kp = 0.002084f, Ki = 0.081569f;
+	float iset = 0.0f;
+
+	err = loadData.set_current - loadData.measured_current;
+	iset = iset_prev + Kp*(err-err_prev) + Ki*0.05f*err;
+	err_prev = err;
+	loadData.set_current_offset = iset-loadData.set_current;
+	setCurrentInAmperes(iset);
 }
 
 /**

@@ -62,6 +62,7 @@ typedef struct
     float Wh;
     float temperature;
     float vbat;
+    float set_current_offset;
     uint16_t rpm;
     // calibration data
     CalibrationData calibration_data;
@@ -93,6 +94,7 @@ typedef struct
 	void (*checkPowerButton)(void);
 	void (*updateTemperature)(void);
 	void (*fanSpeedControl)(void);
+	void (*currentController)(void);
 }LoadController;
 
 extern LoadController* load_control_drv;

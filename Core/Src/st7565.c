@@ -244,7 +244,7 @@ static void ST7565_SetStringInBuffer(String* string)
 	}
 
 	if(string->align == AlignCenter) x = (LCDWIDTH - widthInPixels + x)/2;
-	if(string->align == AlignRight) x = LCDWIDTH - 1 - widthInPixels;
+	if(string->align == AlignRight) x = LCDWIDTH - 1 - widthInPixels - x;
 	x_inv = x;
 
 	while(Length-- > 0)

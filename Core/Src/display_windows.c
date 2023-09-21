@@ -225,7 +225,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     const char* deg = "°C";
     int rpm = (int)data->rpm;
     float params[2] = {data->voltage, data->measured_current};
-    const char* units[2] = {" B  ", " A"};
+    const char* units[2] = {" B", " A"};
     const char vdis_pre_string[] = "Vdis:";
     const char iset_pre_string[] = "Iset:";
 
@@ -259,16 +259,19 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         case Prev:
             if(data->set_current > 0.01f) data->set_current -= step;
             else data->set_current = 0;
+
+            // set current value
+            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
             break;
 
         case Next:
             if(data->set_current < max_current) data->set_current += step;
             else data->set_current = max_current;
+
+            // set current value
+            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
             break;
     }
-
-    // set current value
-    load_control_drv->setCurrentInAmperes(data->set_current);
 
     wnd->strings[0].x_pos = 3;
     wnd->strings[0].y_pos = 2;
@@ -284,11 +287,18 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[1].inverted = NotInverted;
     print2str_drv->PrintInteger(wnd->strings[1].Text, "", &rpm, NULL, 1);
 
-    wnd->strings[2].x_pos = 0;
+    wnd->strings[2].x_pos = 5;
     wnd->strings[2].y_pos = 13;
-    wnd->strings[2].align = AlignCenter;
+    wnd->strings[2].align = AlignLeft;
     wnd->strings[2].font = MSSanSerif_14;
     wnd->strings[2].inverted = NotInverted;
+    print2str_drv->PrintFloat(wnd->strings[2].Text, "", params, units, precisions, 1);
+
+    wnd->strings[3].x_pos = 5;
+    wnd->strings[3].y_pos = 13;
+    wnd->strings[3].align = AlignRight;
+    wnd->strings[3].font = MSSanSerif_14;
+    wnd->strings[3].inverted = NotInverted;
     if(data->measured_current >= 5.0f)
     {
     	precisions[1] = 1;
@@ -297,26 +307,26 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     {
     	precisions[1] = 2;
     }
-    print2str_drv->PrintFloat(wnd->strings[2].Text, "", params, units, precisions, 2);
+    print2str_drv->PrintFloat(wnd->strings[3].Text, "", params+1, units+1, precisions+1, 1);
 
-    wnd->strings[3].x_pos = 0;
-    wnd->strings[3].y_pos = 33;
-    wnd->strings[3].align = AlignCenter;
-    wnd->strings[3].font = font6x8;
-    wnd->strings[3].inverted = NotInverted;
+    wnd->strings[4].x_pos = 0;
+    wnd->strings[4].y_pos = 33;
+    wnd->strings[4].align = AlignCenter;
+    wnd->strings[4].font = font6x8;
+    wnd->strings[4].inverted = NotInverted;
     params[0] = data->mAh;
     params[1] = data->Wh;
     units[0] = " mAh  ";
     units[1] = " Wh";
     precisions[0] = 0;
     precisions[1] = 1;
-    print2str_drv->PrintFloat(wnd->strings[3].Text, "", params, units, precisions, 2);
+    print2str_drv->PrintFloat(wnd->strings[4].Text, "", params, units, precisions, 2);
 
-    wnd->strings[4].x_pos = 0;
-    wnd->strings[4].y_pos = 42;
-    wnd->strings[4].align = AlignCenter;
-    wnd->strings[4].font = font6x8;
-    wnd->strings[4].inverted = NotInverted;
+    wnd->strings[5].x_pos = 0;
+    wnd->strings[5].y_pos = 42;
+    wnd->strings[5].align = AlignCenter;
+    wnd->strings[5].font = font6x8;
+    wnd->strings[5].inverted = NotInverted;
 
     params[0] = data->load_settings.discharge_voltage;
     params[1] = data->set_current;
@@ -334,7 +344,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         {
         	precisions[1] = 2;
         }
-        print2str_drv->PrintFloat(wnd->strings[4].Text, vdis_pre_string, params, units, precisions, 2);
+        print2str_drv->PrintFloat(wnd->strings[5].Text, vdis_pre_string, params, units, precisions, 2);
     }
     else
     {
@@ -346,11 +356,11 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         {
         	precisions[1] = 2;
         }
-        print2str_drv->PrintFloat(wnd->strings[4].Text, iset_pre_string, &params[1], &units[1], &precisions[1], 1);
+        print2str_drv->PrintFloat(wnd->strings[5].Text, iset_pre_string, &params[1], &units[1], &precisions[1], 1);
     }
 
 
-    wnd->StringsQuantity = 5;
+    wnd->StringsQuantity = 6;
 
     st7565_drv->drawBatteryIndicator(105, 1, charge);
     st7565_drv->drawFanIndicator(56, 0);
@@ -683,7 +693,7 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
         steps_num = (int)(data->set_current/step);
         data->set_current = steps_num*step;
         // limit current value
-        load_control_drv->setCurrentInAmperes(data->set_current);
+        load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
     }
 
     wnd->strings[0].x_pos = 15;

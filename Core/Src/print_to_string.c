@@ -48,7 +48,6 @@ static void printFloat(char* res_str, const char* prestr, float* nums, const cha
     int mul = 1;
     int digit = 0;
     int digits_num = 0;
-    int is_less_one = 0;
 
     // copy pre-string to result string
     for(int i = 0; i < prestr_len; i++)
@@ -62,15 +61,6 @@ static void printFloat(char* res_str, const char* prestr, float* nums, const cha
        // calculate precision multiplier for converting to int
        mul = pow_10(precision[i]);
 
-       // check number less 1
-        if(nums[i] < 1.0f)
-        {
-            is_less_one = 1;
-        }
-        else
-        {
-            is_less_one = 0;
-        }
        // convert float number to integer with set precision
        tempf = (int)(nums[i]*mul*10);
        // make tempf round
@@ -116,7 +106,6 @@ static void printFloat(char* res_str, const char* prestr, float* nums, const cha
            // get current digit
            if(j == digits_num-precision[i]) res_str[index++] = '.';
            digit = (tempf/pow_10(digits_num-1-j))%10;
-           if(digit == 0 && (j < digits_num-precision[i]-1 && !is_less_one)) continue; // skip leading zero
            res_str[index++] = (char)(digit+0x30);
        }
 
