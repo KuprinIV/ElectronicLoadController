@@ -287,9 +287,9 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[1].inverted = NotInverted;
     print2str_drv->PrintInteger(wnd->strings[1].Text, "", &rpm, NULL, 1);
 
-    wnd->strings[2].x_pos = 5;
+    wnd->strings[2].x_pos = 64;
     wnd->strings[2].y_pos = 13;
-    wnd->strings[2].align = AlignLeft;
+    wnd->strings[2].align = AlignRight;
     wnd->strings[2].font = MSSanSerif_14;
     wnd->strings[2].inverted = NotInverted;
     print2str_drv->PrintFloat(wnd->strings[2].Text, "", params, units, precisions, 1);
