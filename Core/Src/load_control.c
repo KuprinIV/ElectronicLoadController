@@ -436,19 +436,18 @@ static void fanSpeedControl(void)
 }
 
 /**
-  * @brief  Realizes controller for current set
+  * @brief  Realizes controller for current set: Hreg(z) = Ki*T0/(1-(z^-1))
   * @param  none
   * @retval none
   */
 static void currentController(void)
 {
-	static float err_prev;
-	float err = 0.0f, Kp = 0.002084f, Ki = 0.081569f;
+	float err = 0.0f, Ki = 0.3f, T0 = 0.05f;
 	float iset = 0.0f;
 
 	err = loadData.set_current - loadData.measured_current;
-	iset = iset_prev + Kp*(err-err_prev) + Ki*0.05f*err;
-	err_prev = err;
+	iset = iset_prev + Ki*T0*err;
+
 	loadData.set_current_offset = iset-loadData.set_current;
 	setCurrentInAmperes(iset);
 }
