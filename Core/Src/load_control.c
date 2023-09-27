@@ -303,10 +303,12 @@ static void calcMeasuredParams(void)
 	loadData.vref_raw = adc_averaged_data[2];
 
 	current_filt = doFirFilter(&fir_LP_current, adc_averaged_data[3]);
-	loadData.measured_current_raw = current_filt > 0 ? (uint16_t)current_filt : 0;
+	loadData.measured_current_raw += current_filt > 0 ? (uint16_t)current_filt : 0;
+	loadData.measured_current_raw /= 2;
 
 	voltage_filt = doFirFilter(&fir_LP_voltage,adc_averaged_data[4]);
-	loadData.voltage_raw = voltage_filt > 0 ? (uint16_t)voltage_filt : 0;
+	loadData.voltage_raw += voltage_filt > 0 ? (uint16_t)voltage_filt : 0;
+	loadData.voltage_raw /= 2;
 
 	loadData.measured_current = calcCurrent2Float(loadData.measured_current_raw);
 	if(loadData.measured_current < 0.0f) loadData.measured_current = 0.0f;
@@ -442,12 +444,13 @@ static void fanSpeedControl(void)
   */
 static void currentController(void)
 {
-	float err = 0.0f, Ki = 0.3f, T0 = 0.05f;
+	static float err_prev;
+	float err = 0.0f, Kp = 0.002084f, Ki = 0.081569f, T0 = 0.05f;
 	float iset = 0.0f;
 
 	err = loadData.set_current - loadData.measured_current;
-	iset = iset_prev + Ki*T0*err;
-
+	iset = iset_prev + Kp*(err-err_prev) + Ki*T0*err;
+	err_prev = err;
 	loadData.set_current_offset = iset-loadData.set_current;
 	setCurrentInAmperes(iset);
 }
