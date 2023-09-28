@@ -190,12 +190,6 @@ int main(void)
 		  }
 		  // fan speed control
 		  load_control_drv->fanSpeedControl();
-
-		  // current controller
-		  if(loadData.on_state && !loadData.is_calibration_mode)
-		  {
-			  load_control_drv->currentController();
-		  }
 	  }
 
 	  // handle end of ADC data conversion event
@@ -204,6 +198,11 @@ int main(void)
 		  loadData.is_conversion_ended = 0;
 		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
+		  // current controller
+		  if(loadData.on_state && !loadData.is_calibration_mode)
+		  {
+			  load_control_drv->currentController();
+		  }
 		  // update display data
 		  display_wnd_ctrl->refreshWindow();
 	  }

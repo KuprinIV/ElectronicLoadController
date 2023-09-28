@@ -89,6 +89,8 @@ static void loadInit(void)
 	// read load settings data, if it was saved
 	readSettingsData();
 
+	iset_prev = loadData.set_current;
+
 	// start DAC
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 	setCurrentInAmperes(0.0f); // set default value
@@ -171,11 +173,13 @@ static void setEnabled(uint8_t state)
 
 		// set current value
 		setDacValue(loadData.set_current_raw);
+
+		// init values for current controller
+		loadData.set_current_offset = 0.0f;
+		iset_prev = loadData.set_current;
 	}
 	else
 	{
-		loadData.set_current_offset = 0.0f;
-		iset_prev = loadData.set_current;
 		setDacValue(0);
 	}
 }
@@ -286,8 +290,6 @@ static void saveLoadSettings(LoadSettings* ls)
 static void calcMeasuredParams(void)
 {
 	uint32_t adc_averaged_data[5] = {0};
-	int16_t current_filt = 0;
-	int16_t voltage_filt = 0;
 	// calc averaged ADC data
 	for(uint16_t i = 0; i < 5*NUM_OF_SAMPLES; i++)
 	{
@@ -302,12 +304,9 @@ static void calcMeasuredParams(void)
 	loadData.vdac0_raw = adc_averaged_data[1];
 	loadData.vref_raw = adc_averaged_data[2];
 
-	current_filt = doFirFilter(&fir_LP_current, adc_averaged_data[3]);
-	loadData.measured_current_raw += current_filt > 0 ? (uint16_t)current_filt : 0;
+	loadData.measured_current_raw += adc_averaged_data[3];
 	loadData.measured_current_raw /= 2;
-
-	voltage_filt = doFirFilter(&fir_LP_voltage,adc_averaged_data[4]);
-	loadData.voltage_raw += voltage_filt > 0 ? (uint16_t)voltage_filt : 0;
+	loadData.voltage_raw += adc_averaged_data[4];
 	loadData.voltage_raw /= 2;
 
 	loadData.measured_current = calcCurrent2Float(loadData.measured_current_raw);
@@ -429,7 +428,7 @@ static void fanSpeedControl(void)
 		else
 		{
 			fan_speed = (uint8_t)(Kp*(loadData.temperature-40.0f)+Ki*(loadData.temperature-temp_prev));
-			if(fan_speed > 100) fan_speed = 100;
+			if(fan_speed > 99) fan_speed = 99;
 			if(fan_speed < 0) fan_speed = 0;
 			setFanSpeed((uint8_t)fan_speed);
 		}
@@ -445,7 +444,7 @@ static void fanSpeedControl(void)
 static void currentController(void)
 {
 	static float err_prev;
-	float err = 0.0f, Kp = 0.002084f, Ki = 0.081569f, T0 = 0.05f;
+	float err = 0.0f, Kp = 0.002084f, Ki = 0.081569f, T0 = 0.1f;
 	float iset = 0.0f;
 
 	err = loadData.set_current - loadData.measured_current;

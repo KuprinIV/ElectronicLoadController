@@ -299,7 +299,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[3].align = AlignRight;
     wnd->strings[3].font = MSSanSerif_14;
     wnd->strings[3].inverted = NotInverted;
-    if(data->measured_current >= 5.0f)
+    if(data->measured_current >= 10.0f)
     {
     	precisions[1] = 1;
     }
@@ -314,13 +314,24 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[4].align = AlignCenter;
     wnd->strings[4].font = font6x8;
     wnd->strings[4].inverted = NotInverted;
-    params[0] = data->mAh;
-    params[1] = data->Wh;
-    units[0] = " mAh  ";
-    units[1] = " Wh";
-    precisions[0] = 0;
-    precisions[1] = 1;
-    print2str_drv->PrintFloat(wnd->strings[4].Text, "", params, units, precisions, 2);
+
+    if(data->load_settings.load_work_mode == BatteryDischarge)
+    {
+		params[0] = data->mAh;
+		params[1] = data->Wh;
+		units[0] = " mAh  ";
+		units[1] = " Wh";
+		precisions[0] = 0;
+		precisions[1] = 1;
+		print2str_drv->PrintFloat(wnd->strings[4].Text, "", params, units, precisions, 2);
+    }
+    else
+    {
+		params[0] = data->voltage*data->measured_current;
+		units[0] = " W";
+		precisions[0] = 1;
+		print2str_drv->PrintFloat(wnd->strings[4].Text, "", params, units, precisions, 1);
+    }
 
     wnd->strings[5].x_pos = 0;
     wnd->strings[5].y_pos = 42;
@@ -336,7 +347,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     precisions[1] = 1;
     if(data->load_settings.load_work_mode == BatteryDischarge)
     {
-        if(data->set_current >= 5.0f)
+        if(data->set_current >= 10.0f)
         {
         	precisions[1] = 1;
         }
@@ -348,7 +359,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     }
     else
     {
-        if(data->set_current >= 5.0f)
+        if(data->set_current >= 10.0f)
         {
         	precisions[1] = 1;
         }
