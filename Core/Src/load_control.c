@@ -438,7 +438,7 @@ static void fanSpeedControl(void)
 }
 
 /**
-  * @brief  Realizes controller for current set: Hreg(z) = Ki*T0/(1-(z^-1))
+  * @brief  Realizes PI controller for current set: Hreg(z) = Kp + Ki*T0/(1-(z^-1))
   * @param  none
   * @retval none
   */
