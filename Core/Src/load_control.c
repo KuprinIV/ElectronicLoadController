@@ -414,8 +414,7 @@ static void updateTemperatureValue(void)
 static void fanSpeedControl(void)
 {
 	static uint16_t tick_cntr;
-	static float temp_prev;
-	float Kp = 5.0f, Ki = 0.1f;
+	float Kp = 5.0f;
 	int8_t fan_speed = 0;
 
 	if(tick_cntr++ >= FAN_SPEED_CTRL_TICKS)
@@ -427,12 +426,11 @@ static void fanSpeedControl(void)
 		}
 		else
 		{
-			fan_speed = (uint8_t)(Kp*(loadData.temperature-40.0f)+Ki*(loadData.temperature-temp_prev));
+			fan_speed = (uint8_t)(Kp*(loadData.temperature-40.0f));
 			if(fan_speed > 99) fan_speed = 99;
 			if(fan_speed < 0) fan_speed = 0;
 			setFanSpeed((uint8_t)fan_speed);
 		}
-		temp_prev = loadData.temperature;
 	}
 }
 
