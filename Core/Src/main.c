@@ -172,7 +172,7 @@ int main(void)
 
 		  // check accumulator voltage in Discharge mode
 		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage
-				  && !loadData.is_battery_discharge_detected)
+				  && !loadData.is_battery_discharge_detected && loadData.on_state)
 		  {
 			  loadData.is_battery_discharge_detected = 1;
 			  // if accumulator voltage lower discharge voltage level, reset current
