@@ -68,6 +68,8 @@ static volatile uint32_t rpm_cntr = 0;
 static uint16_t adcSamples[5*NUM_OF_SAMPLES] = {0};
 static uint16_t rampVals[101] = {0};
 static float iset_prev = 0.0f;
+static uint16_t rampval_prev = 0;
+static uint16_t dacval_zero = 0;
 
 Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
@@ -90,6 +92,8 @@ static void loadInit(void)
 	readSettingsData();
 
 	iset_prev = loadData.set_current;
+	dacval_zero = calcCurrent2Discrete(0.0f)-3;
+	rampval_prev = dacval_zero;
 
 	// start DAC
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
@@ -469,17 +473,18 @@ static void setDacValue(uint16_t val)
 
 	if(loadData.load_settings.load_work_mode == Ramp)
 	{
-		if(val == 0) val = calcCurrent2Discrete(0.0f)-2;
-		delta_val = ABS(val - loadData.set_current_raw);
+		if(val == 0) val = dacval_zero;
+		delta_val = ABS(val - rampval_prev);
 		if(delta_val < 20)
 		{
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
 			// update set current raw value
 			loadData.set_current_raw = val;
+			rampval_prev = val;
 			return;
 		}
 		// fill ramp values array
-		y = loadData.set_current_raw;
+		y = rampval_prev;
 
 		if (val >= loadData.set_current_raw)
 		{
@@ -530,6 +535,7 @@ static void setDacValue(uint16_t val)
 	}
 	// update set current raw value
 	loadData.set_current_raw = val;
+	rampval_prev = val;
 }
 
 /**
