@@ -8,7 +8,7 @@
 #include <string.h>
 #include "print_to_string.h"
 
-#define ABS(x) (x) >= 0 ? (x):(-x)
+#define ABS(x) (x) >= 0 ? (x):(-(x))
 
 // inner functions
 static void ST7565_writeCommand(uint8_t cmd);

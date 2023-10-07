@@ -9,7 +9,7 @@
 #include "fir_filter.h"
 #include <string.h>
 
-#define ABS(x) (x) >= 0 ? (x):(-x)
+#define ABS(x) (x) >= 0 ? (x):(-(x))
 
 // driver functions
 static void loadInit(void);
@@ -459,7 +459,7 @@ static void currentController(void)
   */
 static void setDacValue(uint16_t val)
 {
-	uint16_t delta_val = ABS(val - loadData.set_current_raw);
+	uint16_t delta_val = 0;
 	uint16_t delta_samples = loadData.load_settings.current_ramp_time;
 	int16_t y = 0, yinc1 = 0, yinc2 = 0, den = 0, num = 0, numadd = 0, mul = 0;
 
@@ -469,6 +469,15 @@ static void setDacValue(uint16_t val)
 
 	if(loadData.load_settings.load_work_mode == Ramp)
 	{
+		if(val == 0) val = calcCurrent2Discrete(0.0f)-2;
+		delta_val = ABS(val - loadData.set_current_raw);
+		if(delta_val < 20)
+		{
+			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, val); // set default value
+			// update set current raw value
+			loadData.set_current_raw = val;
+			return;
+		}
 		// fill ramp values array
 		y = loadData.set_current_raw;
 
