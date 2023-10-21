@@ -451,6 +451,11 @@ static void currentController(void)
 
 	err = loadData.set_current - loadData.measured_current;
 	iset = iset_prev + Kp*(err-err_prev) + Ki*T0*err;
+	// limit max regulator output
+	if(iset > 1.1f*loadData.set_current)
+	{
+		iset = 1.1f*loadData.set_current;
+	}
 	err_prev = err;
 	loadData.set_current_offset = iset-loadData.set_current;
 	setCurrentInAmperes(iset);
