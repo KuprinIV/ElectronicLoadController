@@ -14,7 +14,6 @@
 // driver functions
 static void loadInit(void);
 static void readCalibrationData(void);
-static void readSettingsData(void);
 static void setCurrentInDiscretes(uint16_t val);
 static void setCurrentInAmperes(float val);
 static void setEnabled(uint8_t state);
@@ -22,7 +21,6 @@ static int16_t getEncoderOffset(void);
 static void saveCalibrationData(CalibrationData* cd);
 static void saveLoadSettings(LoadSettings* ls);
 static void calcMeasuredParams(void);
-static void setFanSpeed(uint8_t fs);
 static void powerControl(uint8_t is_on);
 static uint8_t checkOvertemperature(void);
 static void checkPowerButton(void);
@@ -35,11 +33,15 @@ static void setDacValue(uint16_t val);
 static float calcCurrent2Float(uint16_t adc_val);
 static uint16_t calcCurrent2Discrete(float ampere_val);
 static float calcVoltage(uint16_t adc_val);
+static void readSettingsData(void);
+static void setFanSpeed(uint8_t fs);
+static void saveLoadParams(void);
+static void readLoadParams(void);
+static void resetLoadParams(void);
 
 LoadController lc_driver = {
 		loadInit,
 		readCalibrationData,
-		readSettingsData,
 		setCurrentInDiscretes,
 		setCurrentInAmperes,
 		setEnabled,
@@ -47,7 +49,6 @@ LoadController lc_driver = {
 		saveCalibrationData,
 		saveLoadSettings,
 		calcMeasuredParams,
-		setFanSpeed,
 		powerControl,
 		checkOvertemperature,
 		checkPowerButton,
@@ -90,6 +91,13 @@ static void loadInit(void)
 
 	// read load settings data, if it was saved
 	readSettingsData();
+
+	// read load parameters
+	readLoadParams();
+	if(loadData.mAh > 0.0f || loadData.Wh > 0.0f)
+	{
+		loadData.is_battery_discharge_detected = 0;
+	}
 
 	iset_prev = loadData.set_current;
 	dacval_zero = calcCurrent2Discrete(0.0f)-3;
@@ -168,12 +176,15 @@ static void setEnabled(uint8_t state)
 	loadData.on_state = state;
 	if(loadData.on_state)
 	{
-		// reset mAh and Wh counters
-		loadData.mAh = 0.0f;
-		loadData.Wh = 0.0f;
+		if((loadData.load_settings.load_work_mode != BatteryDischarge) || loadData.is_battery_discharge_detected)
+		{
+			// reset mAh and Wh counters
+			loadData.mAh = 0.0f;
+			loadData.Wh = 0.0f;
 
-		// reset battery discharge detected flag
-		loadData.is_battery_discharge_detected = 0;
+			// reset battery discharge detected flag
+			loadData.is_battery_discharge_detected = 0;
+		}
 
 		// set current value
 		setDacValue(loadData.set_current_raw);
@@ -185,6 +196,11 @@ static void setEnabled(uint8_t state)
 	else
 	{
 		setDacValue(0);
+		// reset saved load parameters in EEPROM
+		if((loadData.load_settings.load_work_mode == BatteryDischarge) && loadData.is_battery_discharge_detected)
+		{
+			resetLoadParams();
+		}
 	}
 }
 
@@ -389,6 +405,7 @@ static void checkPowerButton(void)
 	// if button is holding more 1.5 sec or Vbat is lower VBAT_LOW value, make power off
 	if(tick_cntr == POWER_OFF_TICKS || loadData.vbat < VBAT_LOW)
 	{
+		saveLoadParams(); // save load parameters
 		setEnabled(0); // reset current
 		st7565_drv->displayReset(); // reset display
 		powerControl(0); // power off
@@ -627,6 +644,91 @@ static float calcVoltage(uint16_t adc_val)
 	}
 
 	return voltage;
+}
+
+/**
+  * @brief  Save load parameters data in EEPROM
+  * @param  none
+  * @retval none
+  */
+static void saveLoadParams(void)
+{
+	HAL_StatusTypeDef flash_ok = HAL_ERROR;
+	float load_params[3] = {0.0f};
+	uint32_t load_params_ptr[3];
+
+	load_params[0] = loadData.set_current;
+	if(loadData.load_settings.load_work_mode == BatteryDischarge)
+	{
+		load_params[1] = loadData.mAh;
+		load_params[2] = loadData.Wh;
+	}
+
+	memcpy(load_params_ptr, (uint32_t*)load_params, sizeof(load_params));
+
+	HAL_FLASHEx_DATAEEPROM_Unlock();
+
+	// erase EEPROM
+	flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR);
+	for(uint8_t i = 0; i < 4; i++)
+	{
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR+4*i);
+	}
+
+	// save calibration coefficients
+	if(flash_ok == HAL_OK)
+	{
+		// write signature
+		flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_PARAM_ADDR, IS_EEPROM_WRITTEN_SIGN);
+
+		// write data
+		for(uint8_t i = 0; i < 3; i++)
+		{
+			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_PARAM_ADDR+4*i+4, load_params_ptr[i]);
+		}
+
+		if(flash_ok != HAL_OK)
+		{
+			Error_Handler();
+		}
+	}
+
+	HAL_FLASHEx_DATAEEPROM_Lock();
+}
+
+/* @brief  Read load parameters data from EEPROM
+* @param  none
+* @retval none
+*/
+static void readLoadParams(void)
+{
+	float load_params[3];
+	if((*(__IO uint32_t *)EEPROM_LOAD_PARAM_ADDR) == IS_EEPROM_WRITTEN_SIGN)
+	{
+		memcpy(load_params, (uint8_t*)EEPROM_LOAD_PARAM_ADDR+4, sizeof(load_params));
+		// restore load parameters
+		loadData.set_current = load_params[0];
+		loadData.mAh = load_params[1];
+		loadData.Wh = load_params[2];
+	}
+}
+
+/* @brief  Reset load parameters data from EEPROM
+* @param  none
+* @retval none
+*/
+static void resetLoadParams(void)
+{
+	HAL_FLASHEx_DATAEEPROM_Unlock();
+
+	// erase EEPROM
+	HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR);
+	for(uint8_t i = 0; i < 4; i++)
+	{
+		HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR+4*i);
+	}
+
+	HAL_FLASHEx_DATAEEPROM_Lock();
 }
 
 /**

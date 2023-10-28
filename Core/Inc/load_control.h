@@ -14,6 +14,7 @@
 #define NUM_OF_SAMPLES 			100
 #define EEPROM_CAL_DATA_ADDR 	0x08080000
 #define EEPROM_LOAD_SET_ADDR 	0x08080020
+#define EEPROM_LOAD_PARAM_ADDR 	0x08080040
 #define IS_EEPROM_WRITTEN_SIGN	0x55555555
 #define MAH_CALC_LIMIT 			0.01f
 #define VBAT_LOW				3.4f
@@ -81,7 +82,6 @@ typedef struct
 {
 	void (*loadInit)(void);
 	void (*readCalibrationData)(void);
-	void (*readSettingsData)(void);
 	void (*setCurrentInDiscreets)(uint16_t val);
 	void (*setCurrentInAmperes)(float val);
 	void (*setEnabled)(uint8_t state);
@@ -89,7 +89,6 @@ typedef struct
 	void (*saveCalibrationData)(CalibrationData* cd);
 	void (*saveLoadSettings)(LoadSettings* ls);
 	void (*calcMeasuredParams)(void);
-	void (*setFanSpeed)(uint8_t fs);
 	void (*powerControl)(uint8_t is_on);
 	uint8_t (*checkOvertemperature)(void);
 	void (*checkPowerButton)(void);
