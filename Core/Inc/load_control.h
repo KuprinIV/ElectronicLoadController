@@ -11,17 +11,19 @@
 #include "main.h"
 #include "ds18b20.h"
 
-#define NUM_OF_SAMPLES 			100
-#define EEPROM_CAL_DATA_ADDR 	0x08080000
-#define EEPROM_LOAD_SET_ADDR 	0x08080020
-#define EEPROM_LOAD_PARAM_ADDR 	0x08080040
-#define IS_EEPROM_WRITTEN_SIGN	0x55555555
-#define MAH_CALC_LIMIT 			0.01f
-#define VBAT_LOW				3.4f
-#define POWER_OFF_TICKS			30
-#define TEMP_UPDATE_TICKS		20
-#define FAN_SPEED_CTRL_TICKS	200
-#define FAN_SPEED_AVG_TICKS		10
+#define NUM_OF_SAMPLES 					100
+#define EEPROM_CAL_DATA_ADDR 			0x08080000
+#define EEPROM_LOAD_SET_ADDR 			0x08080020
+#define EEPROM_LOAD_PARAM_ADDR 			0x08080040
+#define IS_EEPROM_WRITTEN_SIGN			0x55555555
+#define MAH_CALC_LIMIT 					0.01f
+#define VBAT_LOW						3.4f
+#define POWER_OFF_TICKS					30
+#define TEMP_UPDATE_TICKS				20
+#define FAN_SPEED_CTRL_TICKS			200
+#define FAN_SPEED_AVG_TICKS				10
+
+//#define IS_CURRENT_CONTROLLER_ENABLED	1
 
 typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
 

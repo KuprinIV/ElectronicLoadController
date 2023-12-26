@@ -99,7 +99,9 @@ static void loadInit(void)
 		loadData.is_battery_discharge_detected = 0;
 	}
 
+#ifdef IS_CURRENT_CONTROLLER_ENABLED
 	iset_prev = loadData.set_current;
+#endif
 	dacval_zero = calcCurrent2Discrete(0.0f)-3;
 	rampval_prev = dacval_zero;
 
@@ -161,7 +163,9 @@ static void setCurrentInDiscretes(uint16_t val)
   */
 static void setCurrentInAmperes(float val)
 {
+#ifdef IS_CURRENT_CONTROLLER_ENABLED
 	iset_prev = val;
+#endif
 	uint16_t dac_val = calcCurrent2Discrete(val);
 	setCurrentInDiscretes(dac_val);
 }
@@ -190,8 +194,10 @@ static void setEnabled(uint8_t state)
 		setDacValue(loadData.set_current_raw);
 
 		// init values for current controller
+#ifdef IS_CURRENT_CONTROLLER_ENABLED
 		loadData.set_current_offset = 0.0f;
 		iset_prev = loadData.set_current;
+#endif
 	}
 	else
 	{

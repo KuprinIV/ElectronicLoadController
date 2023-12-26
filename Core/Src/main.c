@@ -199,10 +199,12 @@ int main(void)
 		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
 		  // current controller
+#ifdef IS_CURRENT_CONTROLLER_ENABLED
 		  if(loadData.on_state && !loadData.is_calibration_mode)
 		  {
 			  load_control_drv->currentController();
 		  }
+#endif
 		  // update display data
 		  display_wnd_ctrl->refreshWindow();
 	  }
