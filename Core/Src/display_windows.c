@@ -374,7 +374,8 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     }
     else if(data->load_settings.load_work_mode == ConstPower)
     {
-    	print2str_drv->PrintFloat(wnd->strings[5].Text, pwr_set_pre_string, &data->set_power, " W", 1, 1);
+    	units[1] = " W";
+    	print2str_drv->PrintFloat(wnd->strings[5].Text, pwr_set_pre_string, &data->set_power, &units[1], &precisions[1], 1);
     }
     else
     {
