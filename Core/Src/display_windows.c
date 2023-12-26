@@ -220,6 +220,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
 {
     float max_current;
     float step = 0.01f;
+    float power_step = 0.5f;
     uint8_t charge = 0;
     int precisions[2] = {2, 1};
     const char* deg = "°C";
@@ -228,6 +229,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     const char* units[2] = {" B", " A"};
     const char vdis_pre_string[] = "Vdis:";
     const char iset_pre_string[] = "Iset:";
+    const char pwr_set_pre_string[] = "Set power:";
 
     // calculate battery charge percentage
     if(data->vbat > VBAT_LOW)
@@ -238,7 +240,6 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     {
     	charge = 0;
     }
-
 
     max_current = (float)data->load_settings.max_power/data->voltage;
     if(max_current > 20.0f) max_current = 20.0f;
@@ -257,19 +258,33 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
             break;
 
         case Prev:
-            if(data->set_current > 0.01f) data->set_current -= step;
-            else data->set_current = 0;
-
-            // set current value
-            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
-            break;
+        	if(data->load_settings.load_work_mode == ConstPower)
+        	{
+        		if(data->set_power > power_step) data->set_power -= power_step;
+        		else data->set_power = 0;
+        	}
+        	else
+        	{
+				if(data->set_current > step) data->set_current -= step;
+				else data->set_current = 0;
+	            // set current value
+	            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
+        	}
+        	break;
 
         case Next:
-            if(data->set_current < max_current) data->set_current += step;
-            else data->set_current = max_current;
-
-            // set current value
-            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
+        	if(data->load_settings.load_work_mode == ConstPower)
+        	{
+        		if(data->set_power < (float)data->load_settings.max_power) data->set_power += power_step;
+        		else data->set_power = (float)data->load_settings.max_power;
+        	}
+        	else
+        	{
+				if(data->set_current < max_current) data->set_current += step;
+				else data->set_current = max_current;
+	            // set current value
+	            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
+        	}
             break;
     }
 
@@ -356,6 +371,10 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         	precisions[1] = 2;
         }
         print2str_drv->PrintFloat(wnd->strings[5].Text, vdis_pre_string, params, units, precisions, 2);
+    }
+    else if(data->load_settings.load_work_mode == ConstPower)
+    {
+    	print2str_drv->PrintFloat(wnd->strings[5].Text, pwr_set_pre_string, &data->set_power, " W", 1, 1);
     }
     else
     {
@@ -454,13 +473,13 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
   */
 static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* modes[3]  = {"Simple\0","Discharge\0","Ramp up\0"};
+    const char* modes[4]  = {"Simple\0","Discharge\0","Ramp up\0","Const power\0"};
     uint16_t ramp_lengths[4] = {10, 20, 50, 100};
     int8_t mode_cntr = (int8_t)data->load_settings.load_work_mode;
     int8_t ramps_cntr = 0;
-    int8_t modes_num = 3;
+    int8_t modes_num = 4;
     int8_t ramp_lengths_num = sizeof(ramp_lengths)/2;
-    int mode_items_num = data->load_settings.load_work_mode == SimpleLoad ? 2 : 3;
+    int mode_items_num = (data->load_settings.load_work_mode == SimpleLoad || data->load_settings.load_work_mode == ConstPower) ? 2 : 3;
     float step = 0.05f;
 
     const char* delim_volt = " V";

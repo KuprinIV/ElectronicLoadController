@@ -25,7 +25,7 @@
 
 //#define IS_CURRENT_CONTROLLER_ENABLED	1
 
-typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
+typedef enum {SimpleLoad, BatteryDischarge, Ramp, ConstPower} LoadMode;
 
 typedef struct
 {
@@ -67,6 +67,7 @@ typedef struct
     float temperature;
     float vbat;
     float set_current_offset;
+    float set_power;
     uint16_t rpm;
     // calibration data
     CalibrationData calibration_data;

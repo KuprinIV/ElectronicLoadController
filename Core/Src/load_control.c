@@ -72,7 +72,7 @@ static float iset_prev = 0.0f;
 static uint16_t rampval_prev = 0;
 static uint16_t dacval_zero = 0;
 
-Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
+Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs

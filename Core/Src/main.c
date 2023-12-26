@@ -198,6 +198,15 @@ int main(void)
 		  loadData.is_conversion_ended = 0;
 		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
+		  // set current value in constant power mode
+		  if(loadData.load_settings.load_work_mode == ConstPower && loadData.on_state)
+		  {
+			  // calculate current value
+			  loadData.set_current = loadData.set_power/loadData.voltage;
+			  if(loadData.set_current > 20.0f) loadData.set_current = 20.0f;
+			  // update set current value
+			  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
+		  }
 		  // current controller
 #ifdef IS_CURRENT_CONTROLLER_ENABLED
 		  if(loadData.on_state && !loadData.is_calibration_mode)
