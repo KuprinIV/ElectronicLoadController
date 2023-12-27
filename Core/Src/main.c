@@ -202,10 +202,17 @@ int main(void)
 		  if(loadData.load_settings.load_work_mode == ConstPower && loadData.on_state)
 		  {
 			  // calculate current value
-			  loadData.set_current = loadData.set_power/loadData.voltage;
-			  if(loadData.set_current > 20.0f) loadData.set_current = 20.0f;
-			  // update set current value
-			  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
+			  if(loadData.voltage >= 0.1f)
+			  {
+				  loadData.set_current = loadData.set_power/loadData.voltage;
+				  if(loadData.set_current > 20.0f) loadData.set_current = 20.0f;
+				  // update set current value
+				  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
+			  }
+			  else
+			  {
+				  load_control_drv->setEnabled(0); // disable load if no voltage
+			  }
 		  }
 		  // current controller
 #ifdef IS_CURRENT_CONTROLLER_ENABLED

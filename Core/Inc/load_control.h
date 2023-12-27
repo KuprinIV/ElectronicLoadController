@@ -37,6 +37,7 @@ typedef struct
    uint16_t current_read_5A;
    uint16_t voltage_2V;
    uint16_t voltage_10V;
+   uint16_t voltage_17V;
    uint16_t voltage_25V;
 }CalibrationData;
 

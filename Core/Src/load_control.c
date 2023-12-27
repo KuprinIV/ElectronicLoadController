@@ -72,7 +72,7 @@ static float iset_prev = 0.0f;
 static uint16_t rampval_prev = 0;
 static uint16_t dacval_zero = 0;
 
-Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1500},
+Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1000, 1500},
 				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
@@ -640,13 +640,17 @@ static float calcVoltage(uint16_t adc_val)
 	{
 		voltage = 2.0f + 8.0f*(adc_val - loadData.calibration_data.voltage_2V)/(loadData.calibration_data.voltage_10V-loadData.calibration_data.voltage_2V);
 	}
-	else if(adc_val >= loadData.calibration_data.voltage_10V && adc_val < loadData.calibration_data.voltage_25V)
+	else if(adc_val >= loadData.calibration_data.voltage_10V && adc_val < loadData.calibration_data.voltage_17V)
 	{
-		voltage = 10.0f + 15.0f*(adc_val - loadData.calibration_data.voltage_10V)/(loadData.calibration_data.voltage_25V-loadData.calibration_data.voltage_10V);
+		voltage = 10.0f + 7.0f*(adc_val - loadData.calibration_data.voltage_10V)/(loadData.calibration_data.voltage_17V-loadData.calibration_data.voltage_10V);
+	}
+	else if(adc_val >= loadData.calibration_data.voltage_17V && adc_val < loadData.calibration_data.voltage_25V)
+	{
+		voltage = 17.0f + 8.0f*(adc_val - loadData.calibration_data.voltage_17V)/(loadData.calibration_data.voltage_25V-loadData.calibration_data.voltage_17V);
 	}
 	else
 	{
-		voltage = 25.0f + 15.0f*(adc_val - loadData.calibration_data.voltage_25V)/(loadData.calibration_data.voltage_25V-loadData.calibration_data.voltage_10V);
+		voltage = 25.0f + 8.0f*(adc_val - loadData.calibration_data.voltage_25V)/(loadData.calibration_data.voltage_25V-loadData.calibration_data.voltage_17V);
 	}
 
 	return voltage;

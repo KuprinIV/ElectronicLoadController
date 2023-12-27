@@ -267,8 +267,6 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         	{
 				if(data->set_current > step) data->set_current -= step;
 				else data->set_current = 0;
-	            // set current value
-	            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
         	}
         	break;
 
@@ -282,11 +280,12 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         	{
 				if(data->set_current < max_current) data->set_current += step;
 				else data->set_current = max_current;
-	            // set current value
-	            load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
         	}
             break;
     }
+
+    // set current value
+    load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
 
     wnd->strings[0].x_pos = 3;
     wnd->strings[0].y_pos = 2;
@@ -765,8 +764,8 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
 static int SetupCalibrationWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
     const char* modes[2]  = {"Current calibration\0","Voltage calibration\0"};
-    const char* refs[6] = {"0,1A", "1A", " 5A", "2V", "10V", "25V"};
-    int calibration_items_num = 7;
+    const char* refs[7] = {"0,1A", "1A", " 5A", "2V", "10V", "17V", "25V"};
+    int calibration_items_num = 8 ;
     static int save_calibration_data_item;
     int read_coeff_value = 0;
     uint16_t* calibration_data_ptr = (uint16_t*)&data->calibration_data;
