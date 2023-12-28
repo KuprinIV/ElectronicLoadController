@@ -226,7 +226,15 @@ int main(void)
 			  if(loadData.offset_check_cntr-- == 0)
 			  {
 				  loadData.set_current_offset = loadData.set_current - loadData.measured_current;
-				  loadData.is_offset_checked = 1;
+				  if(loadData.set_current_offset > 0.1f*loadData.set_current) // if offset too big (for example no load), restart check process
+				  {
+					  loadData.offset_check_cntr = OFFSET_CHECK_DELAY_TICKS;
+					  loadData.set_current_offset = 0.0f;
+				  }
+				  else
+				  {
+					  loadData.is_offset_checked = 1;
+				  }
 			  }
 		  }
 		  // update current value
