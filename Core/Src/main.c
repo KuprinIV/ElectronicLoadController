@@ -218,25 +218,28 @@ int main(void)
 			  load_control_drv->currentController();
 		  }
 #else
-		  // check to calculate set current offset value
-		  if(!loadData.is_offset_checked)
+		  if(!loadData.is_calibration_mode)
 		  {
-			  if(loadData.offset_check_cntr-- == 0)
+			  // check to calculate set current offset value
+			  if(!loadData.is_offset_checked)
 			  {
-				  loadData.set_current_offset = loadData.set_current - loadData.measured_current;
-				  if(loadData.set_current_offset > 0.1f*loadData.set_current) // if offset too big (for example no load), restart check process
+				  if(loadData.offset_check_cntr-- == 0)
 				  {
-					  loadData.offset_check_cntr = OFFSET_CHECK_DELAY_TICKS;
-					  loadData.set_current_offset = 0.0f;
-				  }
-				  else
-				  {
-					  loadData.is_offset_checked = 1;
+					  loadData.set_current_offset = loadData.set_current - loadData.measured_current;
+					  if(loadData.set_current_offset > 0.1f*loadData.set_current) // if offset too big (for example no load), restart check process
+					  {
+						  loadData.offset_check_cntr = OFFSET_CHECK_DELAY_TICKS;
+						  loadData.set_current_offset = 0.0f;
+					  }
+					  else
+					  {
+						  loadData.is_offset_checked = 1;
+					  }
 				  }
 			  }
+			  // update current value
+			  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
 		  }
-		  // update current value
-		  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
 #endif
 		  // update display data
 		  display_wnd_ctrl->refreshWindow();
