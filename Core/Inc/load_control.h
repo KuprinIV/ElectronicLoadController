@@ -22,6 +22,7 @@
 #define TEMP_UPDATE_TICKS				20
 #define FAN_SPEED_CTRL_TICKS			200
 #define FAN_SPEED_AVG_TICKS				10
+#define OFFSET_CHECK_DELAY_TICKS		30
 
 //#define IS_CURRENT_CONTROLLER_ENABLED	1
 
@@ -59,6 +60,7 @@ typedef struct
 	uint8_t on_state;
 	uint8_t is_battery_discharge_detected;
 	uint8_t is_calibration_mode;
+	uint8_t is_offset_checked;
 	// set and measured parameters
 	float set_current;
     float measured_current;
@@ -80,6 +82,8 @@ typedef struct
     uint16_t measured_current_raw;
     uint16_t set_current_raw;
     uint16_t voltage_raw;
+    // misc
+	uint8_t offset_check_cntr;
 }Data,*pData;
 
 typedef struct

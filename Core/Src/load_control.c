@@ -72,8 +72,8 @@ static float iset_prev = 0.0f;
 static uint16_t rampval_prev = 0;
 static uint16_t dacval_zero = 0;
 
-Data loadData = {0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1000, 1500},
-				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0};
+Data loadData = {0, 0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1000, 1500},
+				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
 FIR_FilterData fir_LP_voltage = {32768, {13, 63, 44, -304, -934, 208, 9066, 16451, 9066, 208, -934, -304, 44, 63, 13}, {0}};
@@ -191,11 +191,14 @@ static void setEnabled(uint8_t state)
 		}
 
 		// set current value
-		setDacValue(loadData.set_current_raw);
+		setCurrentInAmperes(loadData.set_current);
+		// reset previous set current offset value and start new offset check
+		loadData.set_current_offset = 0.0f;
+		loadData.offset_check_cntr = OFFSET_CHECK_DELAY_TICKS;
+		loadData.is_offset_checked = 0;
 
 		// init values for current controller
 #ifdef IS_CURRENT_CONTROLLER_ENABLED
-		loadData.set_current_offset = 0.0f;
 		iset_prev = loadData.set_current;
 #endif
 	}

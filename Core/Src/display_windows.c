@@ -284,9 +284,6 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
             break;
     }
 
-    // set current value
-    load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
-
     wnd->strings[0].x_pos = 3;
     wnd->strings[0].y_pos = 2;
     wnd->strings[0].align = AlignLeft;
@@ -722,8 +719,6 @@ static int SetupMaxPowerWindow(pWindow wnd, pData data, Action item_action, Acti
         step = GetCurrentChangeStep(data->set_current);
         steps_num = (int)(data->set_current/step);
         data->set_current = steps_num*step;
-        // limit current value
-        load_control_drv->setCurrentInAmperes(data->set_current+data->set_current_offset);
     }
 
     wnd->strings[0].x_pos = 15;

@@ -170,17 +170,6 @@ int main(void)
 				display_wnd_ctrl->updateWindowParameters(encoder_offset_action);
 		  }
 
-		  // check accumulator voltage in Discharge mode
-		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage
-				  && !loadData.is_battery_discharge_detected && loadData.on_state)
-		  {
-			  loadData.is_battery_discharge_detected = 1;
-			  // if accumulator voltage lower discharge voltage level, reset current
-			  load_control_drv->setEnabled(0);
-			  // show message box
-			  display_wnd_ctrl->drawBatteryDischargedMsgBox();
-		  }
-
 		  // update DS18B20 temperature and check over temperature event
 		  load_control_drv->updateTemperature();
 		  loadData.is_ovt = load_control_drv->checkOvertemperature();
@@ -198,6 +187,16 @@ int main(void)
 		  loadData.is_conversion_ended = 0;
 		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
+		  // check accumulator voltage in Discharge mode
+		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage
+				  && !loadData.is_battery_discharge_detected && loadData.on_state)
+		  {
+			  loadData.is_battery_discharge_detected = 1;
+			  // if accumulator voltage lower discharge voltage level, reset current
+			  load_control_drv->setEnabled(0);
+			  // show message box
+			  display_wnd_ctrl->drawBatteryDischargedMsgBox();
+		  }
 		  // set current value in constant power mode
 		  if(loadData.load_settings.load_work_mode == ConstPower && loadData.on_state)
 		  {
@@ -220,6 +219,18 @@ int main(void)
 		  {
 			  load_control_drv->currentController();
 		  }
+#else
+		  // check to calculate set current offset value
+		  if(!loadData.is_offset_checked)
+		  {
+			  if(loadData.offset_check_cntr-- == 0)
+			  {
+				  loadData.set_current_offset = loadData.set_current - loadData.measured_current;
+				  loadData.is_offset_checked = 1;
+			  }
+		  }
+		  // update current value
+		  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
 #endif
 		  // update display data
 		  display_wnd_ctrl->refreshWindow();
