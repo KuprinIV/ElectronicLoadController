@@ -205,8 +205,6 @@ int main(void)
 			  {
 				  loadData.set_current = loadData.set_power/loadData.voltage;
 				  if(loadData.set_current > 20.0f) loadData.set_current = 20.0f;
-				  // update set current value
-				  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
 			  }
 			  else
 			  {
