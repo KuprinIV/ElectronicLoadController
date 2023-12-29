@@ -667,10 +667,11 @@ static float calcVoltage(uint16_t adc_val)
 static void saveLoadParams(void)
 {
 	HAL_StatusTypeDef flash_ok = HAL_ERROR;
-	float load_params[3] = {0.0f};
-	uint32_t load_params_ptr[3];
+	float load_params[4] = {0.0f};
+	uint32_t load_params_ptr[4];
 
 	load_params[0] = loadData.set_current;
+	load_params[3] = loadData.set_power;
 	if(loadData.load_settings.load_work_mode == BatteryDischarge)
 	{
 		load_params[1] = loadData.mAh;
@@ -683,7 +684,7 @@ static void saveLoadParams(void)
 
 	// erase EEPROM
 	flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR);
-	for(uint8_t i = 0; i < 4; i++)
+	for(uint8_t i = 0; i < 5; i++)
 	{
 		flash_ok = HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR+4*i);
 	}
@@ -695,7 +696,7 @@ static void saveLoadParams(void)
 		flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_PARAM_ADDR, IS_EEPROM_WRITTEN_SIGN);
 
 		// write data
-		for(uint8_t i = 0; i < 3; i++)
+		for(uint8_t i = 0; i < 4; i++)
 		{
 			flash_ok = HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, EEPROM_LOAD_PARAM_ADDR+4*i+4, load_params_ptr[i]);
 		}
@@ -715,7 +716,7 @@ static void saveLoadParams(void)
 */
 static void readLoadParams(void)
 {
-	float load_params[3];
+	float load_params[4];
 	if((*(__IO uint32_t *)EEPROM_LOAD_PARAM_ADDR) == IS_EEPROM_WRITTEN_SIGN)
 	{
 		memcpy(load_params, (uint8_t*)EEPROM_LOAD_PARAM_ADDR+4, sizeof(load_params));
@@ -723,6 +724,7 @@ static void readLoadParams(void)
 		loadData.set_current = load_params[0];
 		loadData.mAh = load_params[1];
 		loadData.Wh = load_params[2];
+		loadData.set_power = load_params[3];
 	}
 }
 
@@ -736,7 +738,7 @@ static void resetLoadParams(void)
 
 	// erase EEPROM
 	HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR);
-	for(uint8_t i = 0; i < 4; i++)
+	for(uint8_t i = 0; i < 5; i++)
 	{
 		HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR+4*i);
 	}
