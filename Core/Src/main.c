@@ -185,8 +185,10 @@ int main(void)
 	  if(loadData.is_conversion_ended)
 	  {
 		  loadData.is_conversion_ended = 0;
+
 		  // update ADC measured parameters
 		  load_control_drv->calcMeasuredParams();
+
 		  // check accumulator voltage in Discharge mode
 		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.voltage < loadData.load_settings.discharge_voltage
 				  && !loadData.is_battery_discharge_detected && loadData.on_state)
@@ -197,6 +199,7 @@ int main(void)
 			  // show message box
 			  display_wnd_ctrl->drawBatteryDischargedMsgBox();
 		  }
+
 		  // set current value in constant power mode
 		  if(loadData.load_settings.load_work_mode == ConstPower && loadData.on_state)
 		  {
@@ -211,15 +214,14 @@ int main(void)
 				  load_control_drv->setEnabled(0); // disable load if no voltage
 			  }
 		  }
-		  // current controller
-#ifdef IS_CURRENT_CONTROLLER_ENABLED
+
+		  // update current value
 		  if(loadData.on_state && !loadData.is_calibration_mode)
 		  {
+			  // current controller
+#ifdef IS_CURRENT_CONTROLLER_ENABLED
 			  load_control_drv->currentController();
-		  }
 #else
-		  if(!loadData.is_calibration_mode)
-		  {
 			  // check to calculate set current offset value
 			  if(!loadData.is_offset_checked)
 			  {
@@ -237,10 +239,10 @@ int main(void)
 					  }
 				  }
 			  }
-			  // update current value
 			  load_control_drv->setCurrentInAmperes(loadData.set_current + loadData.set_current_offset);
-		  }
 #endif
+		  }
+
 		  // update display data
 		  display_wnd_ctrl->refreshWindow();
 	  }
