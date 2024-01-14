@@ -1,0 +1,3 @@
+# Change Windows 1251 encoding to UTF-8
+*.h text working-tree-encoding=CP1251
+*.c text working-tree-encoding=CP1251

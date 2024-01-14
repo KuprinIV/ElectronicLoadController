@@ -26,7 +26,8 @@
 
 //#define IS_CURRENT_CONTROLLER_ENABLED	1
 
-typedef enum {SimpleLoad, BatteryDischarge, Ramp, ConstPower} LoadMode;
+typedef enum {SimpleLoad, BatteryDischarge, Ramp} LoadMode;
+typedef enum {None, ConstCurrent, ConstPower} BatteryDischargeOption;
 
 typedef struct
 {
@@ -45,6 +46,7 @@ typedef struct
 typedef struct
 {
     LoadMode load_work_mode;
+    BatteryDischargeOption bat_disch_option;
     float discharge_voltage;
     uint16_t max_power;
     uint8_t display_contrast;

@@ -223,13 +223,12 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     float power_step = 0.5f;
     uint8_t charge = 0;
     int precisions[2] = {2, 1};
-    const char* deg = "°C";
+    const char* deg = "Â°C";
     int rpm = (int)data->rpm;
     float params[2] = {data->voltage, data->measured_current};
     const char* units[2] = {" B", " A"};
     const char vdis_pre_string[] = "Vdis:";
     const char iset_pre_string[] = "Iset:";
-    const char pwr_set_pre_string[] = "Set power:";
 
     // calculate battery charge percentage
     if(data->vbat > VBAT_LOW)
@@ -258,7 +257,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
             break;
 
         case Prev:
-        	if(data->load_settings.load_work_mode == ConstPower)
+        	if(data->load_settings.load_work_mode == BatteryDischarge && data->load_settings.bat_disch_option == ConstPower)
         	{
         		if(data->set_power > power_step) data->set_power -= power_step;
         		else data->set_power = 0;
@@ -271,7 +270,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
         	break;
 
         case Next:
-        	if(data->load_settings.load_work_mode == ConstPower)
+        	if(data->load_settings.load_work_mode == BatteryDischarge && data->load_settings.bat_disch_option == ConstPower)
         	{
         		if(data->set_power < (float)data->load_settings.max_power) data->set_power += power_step;
         		else data->set_power = (float)data->load_settings.max_power;
@@ -310,7 +309,7 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     wnd->strings[3].align = AlignRight;
     wnd->strings[3].font = MSSanSerif_14;
     wnd->strings[3].inverted = NotInverted;
-    if(data->measured_current >= 10.0f)
+    if(data->measured_current >= 9.99f)
     {
     	precisions[1] = 1;
     }
@@ -358,20 +357,27 @@ static int DisplayMainWindow(pWindow wnd, pData data, Action item_action, Action
     precisions[1] = 1;
     if(data->load_settings.load_work_mode == BatteryDischarge)
     {
-        if(data->set_current >= 10.0f)
-        {
-        	precisions[1] = 1;
-        }
-        else
-        {
-        	precisions[1] = 2;
-        }
-        print2str_drv->PrintFloat(wnd->strings[5].Text, vdis_pre_string, params, units, precisions, 2);
-    }
-    else if(data->load_settings.load_work_mode == ConstPower)
-    {
-    	units[1] = " W";
-    	print2str_drv->PrintFloat(wnd->strings[5].Text, pwr_set_pre_string, &data->set_power, &units[1], &precisions[1], 1);
+    	if(data->load_settings.bat_disch_option == ConstPower)
+    	{
+    		params[1] = data->set_power;
+
+    		units[0] = "V Pset:";
+        	units[1] = " W";
+
+        	print2str_drv->PrintFloat(wnd->strings[5].Text, vdis_pre_string, params, units, precisions, 2);
+    	}
+    	else
+    	{
+			if(data->set_current >= 10.0f)
+			{
+				precisions[1] = 1;
+			}
+			else
+			{
+				precisions[1] = 2;
+			}
+			print2str_drv->PrintFloat(wnd->strings[5].Text, vdis_pre_string, params, units, precisions, 2);
+    	}
     }
     else
     {
@@ -470,18 +476,38 @@ static int SetMenuWindow(pWindow wnd,pData data, Action item_action, Action valu
   */
 static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action value_action)
 {
-    const char* modes[4]  = {"Simple\0","Discharge\0","Ramp up\0","Const power\0"};
+    const char* modes[3]  = {"Simple\0","Discharge\0","Ramp up\0"};
+    const char* mode_options[3]  = {"None\0","Const current\0","Const power\0"};
     uint16_t ramp_lengths[4] = {10, 20, 50, 100};
     int8_t mode_cntr = (int8_t)data->load_settings.load_work_mode;
+    uint8_t mode_option_cntr = (uint8_t)data->load_settings.bat_disch_option;
     int8_t ramps_cntr = 0;
-    int8_t modes_num = 4;
+    int8_t modes_num = 3;
+    int8_t mode_options_num = 3;
     int8_t ramp_lengths_num = sizeof(ramp_lengths)/2;
-    int mode_items_num = (data->load_settings.load_work_mode == SimpleLoad || data->load_settings.load_work_mode == ConstPower) ? 2 : 3;
+    int mode_items_num = 0;
     float step = 0.05f;
 
     const char* delim_volt = " V";
     const char* delim_ms = " ms";
     int precision = 2;
+
+    // get mode items number
+    switch(data->load_settings.load_work_mode)
+    {
+		case SimpleLoad:
+		default:
+			mode_items_num = 2;
+			break;
+
+		case BatteryDischarge:
+			mode_items_num = 4;
+			break;
+
+		case Ramp:
+			mode_items_num = 3;
+			break;
+    }
 
     // get ramp length counter from saved value
     for(uint8_t i = 0; i < ramp_lengths_num; i++)
@@ -532,8 +558,11 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             {
             	if(data->load_settings.load_work_mode == BatteryDischarge)
             	{
-					if(data->load_settings.discharge_voltage < 50.0f) data->load_settings.discharge_voltage += step;
-					else data->load_settings.discharge_voltage = 50.0f;
+                    if(++mode_option_cntr > mode_options_num-1)
+                    {
+                    	mode_option_cntr = 1;
+                    }
+                    data->load_settings.bat_disch_option = (BatteryDischargeOption)mode_option_cntr;
             	}
             	else if(data->load_settings.load_work_mode == Ramp)
             	{
@@ -542,6 +571,14 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
                     	ramps_cntr = 0;
                     }
                     data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
+            	}
+            }
+            else if(mode_current_item == 3)
+            {
+            	if(data->load_settings.load_work_mode == BatteryDischarge)
+            	{
+					if(data->load_settings.discharge_voltage < 50.0f) data->load_settings.discharge_voltage += step;
+					else data->load_settings.discharge_voltage = 50.0f;
             	}
             }
             break;
@@ -559,8 +596,11 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
             {
             	if(data->load_settings.load_work_mode == BatteryDischarge)
             	{
-					if(data->load_settings.discharge_voltage > 0.05f) data->load_settings.discharge_voltage -= step;
-					else data->load_settings.discharge_voltage = 0.0f;
+                    if(--mode_option_cntr < 1)
+                    {
+                    	mode_option_cntr = mode_options_num-1;
+                    }
+                    data->load_settings.bat_disch_option = (BatteryDischargeOption)mode_option_cntr;
             	}
             	else if(data->load_settings.load_work_mode == Ramp)
             	{
@@ -571,7 +611,22 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
                     data->load_settings.current_ramp_time = ramp_lengths[ramps_cntr];
             	}
             }
+            else if(mode_current_item == 3)
+            {
+            	if(data->load_settings.load_work_mode == BatteryDischarge)
+            	{
+					if(data->load_settings.discharge_voltage > 0.05f) data->load_settings.discharge_voltage -= step;
+					else data->load_settings.discharge_voltage = 0.0f;
+            	}
+            }
             break;
+    }
+
+    // round current value to nearest step value
+    if(data->load_settings.load_work_mode == BatteryDischarge && data->load_settings.bat_disch_option == ConstCurrent)
+    {
+        step = GetCurrentChangeStep(data->set_current);
+        data->set_current = (int)(data->set_current/step)*step;
     }
 
     wnd->strings[0].x_pos = 10;
@@ -590,29 +645,42 @@ static int SetupModeWindow(pWindow wnd, pData data, Action item_action, Action v
 
     if(data->load_settings.load_work_mode == BatteryDischarge)
     {
-        wnd->strings[2].x_pos = 10;
+        wnd->strings[2].x_pos = 5;
         wnd->strings[2].y_pos = 15;
         wnd->strings[2].align = AlignLeft;
         wnd->strings[2].font = font6x8;
         wnd->strings[2].inverted = NotInverted;
-        print2str_drv->PrintString(wnd->strings[2].Text, "", "Vdisch:");
+        print2str_drv->PrintString(wnd->strings[2].Text, "", "Option:");
 
-        wnd->strings[3].x_pos = 50;
+        wnd->strings[3].x_pos = 48;
         wnd->strings[3].y_pos = 15;
         wnd->strings[3].align = AlignCenter;
         wnd->strings[3].font = font6x8;
         wnd->strings[3].inverted = mode_current_item == 2 ? Inverted : NotInverted;
-        print2str_drv->PrintFloat(wnd->strings[3].Text, "", &data->load_settings.discharge_voltage, &delim_volt, &precision, 1);
+        print2str_drv->PrintString(wnd->strings[3].Text, "", mode_options[data->load_settings.bat_disch_option]);
 
-
-        wnd->strings[4].x_pos = 0;
-        wnd->strings[4].y_pos = 55;
-        wnd->strings[4].align = AlignCenter;
+        wnd->strings[4].x_pos = 10;
+        wnd->strings[4].y_pos = 25;
+        wnd->strings[4].align = AlignLeft;
         wnd->strings[4].font = font6x8;
-        wnd->strings[4].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
-        print2str_drv->PrintString(wnd->strings[4].Text, "", "  < Back   ");
+        wnd->strings[4].inverted = NotInverted;
+        print2str_drv->PrintString(wnd->strings[4].Text, "", "Vdisch:");
 
-        wnd->StringsQuantity = 5;
+        wnd->strings[5].x_pos = 50;
+        wnd->strings[5].y_pos = 25;
+        wnd->strings[5].align = AlignCenter;
+        wnd->strings[5].font = font6x8;
+        wnd->strings[5].inverted = mode_current_item == 3 ? Inverted : NotInverted;
+        print2str_drv->PrintFloat(wnd->strings[5].Text, "", &data->load_settings.discharge_voltage, &delim_volt, &precision, 1);
+
+        wnd->strings[6].x_pos = 0;
+        wnd->strings[6].y_pos = 55;
+        wnd->strings[6].align = AlignCenter;
+        wnd->strings[6].font = font6x8;
+        wnd->strings[6].inverted = mode_current_item == mode_items_num ? Inverted : NotInverted;
+        print2str_drv->PrintString(wnd->strings[6].Text, "", "  < Back   ");
+
+        wnd->StringsQuantity = 7;
     }
     else if(data->load_settings.load_work_mode == Ramp)
     {

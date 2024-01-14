@@ -72,7 +72,7 @@ typedef struct
 
 typedef struct Window
 {
-  String strings[6];
+  String strings[7];
   uint8_t StringsQuantity;
   int (*callback)(struct Window* , pData , Action , Action );
   struct Window* next;

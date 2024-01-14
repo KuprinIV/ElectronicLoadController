@@ -201,7 +201,7 @@ int main(void)
 		  }
 
 		  // set current value in constant power mode
-		  if(loadData.load_settings.load_work_mode == ConstPower && loadData.on_state)
+		  if(loadData.load_settings.load_work_mode == BatteryDischarge && loadData.load_settings.bat_disch_option == ConstPower && loadData.on_state)
 		  {
 			  // calculate current value
 			  if(loadData.voltage >= 0.1f)

@@ -73,7 +73,7 @@ static uint16_t rampval_prev = 0;
 static uint16_t dacval_zero = 0;
 
 Data loadData = {0, 0, 0, 0, 0, 0, 0, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, {205, 380, 1150, 10, 100, 500, 120, 600, 1000, 1500},
-				{SimpleLoad, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0, 0};
+				{SimpleLoad, None, 3.0f, 250, 10, 50}, 0, 0, 0, 0, 0, 0};
 
 // init FIR filters data structs
 FIR_FilterData fir_LP_voltage = {32768, {13, 63, 44, -304, -934, 208, 9066, 16451, 9066, 208, -934, -304, 44, 63, 13}, {0}};
@@ -445,7 +445,7 @@ static void fanSpeedControl(void)
 {
 	static uint16_t tick_cntr;
 	float Kp = 5.0f;
-	int8_t fan_speed = 0;
+	uint8_t fan_speed = 0;
 
 	if(tick_cntr++ >= FAN_SPEED_CTRL_TICKS)
 	{
@@ -458,8 +458,7 @@ static void fanSpeedControl(void)
 		{
 			fan_speed = (uint8_t)(Kp*(loadData.temperature-40.0f));
 			if(fan_speed > 99) fan_speed = 99;
-			if(fan_speed < 0) fan_speed = 0;
-			setFanSpeed((uint8_t)fan_speed);
+			setFanSpeed(fan_speed);
 		}
 	}
 }
@@ -728,7 +727,7 @@ static void readLoadParams(void)
 	}
 }
 
-/* @brief  Reset load parameters data from EEPROM
+/* @brief  Reset load parameters (mAh and Wh) data from EEPROM
 * @param  none
 * @retval none
 */
@@ -738,7 +737,7 @@ static void resetLoadParams(void)
 
 	// erase EEPROM
 	HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR);
-	for(uint8_t i = 0; i < 5; i++)
+	for(uint8_t i = 2; i < 4; i++)
 	{
 		HAL_FLASHEx_DATAEEPROM_Erase(EEPROM_LOAD_PARAM_ADDR+4*i);
 	}
