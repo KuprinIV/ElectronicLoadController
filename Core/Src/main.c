@@ -92,6 +92,7 @@ int main(void)
 	uint8_t ec_btn_prev_state = 0;
 	Action encoder_offset_action = NoAction;
 	int16_t encoder_offset = 0;
+	uint8_t is_current_offset_too_big = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -228,7 +229,17 @@ int main(void)
 				  if(loadData.offset_check_cntr-- == 0)
 				  {
 					  loadData.set_current_offset = loadData.set_current - loadData.measured_current;
-					  if(loadData.set_current_offset > 0.1f*loadData.set_current) // if offset too big (for example no load), restart check process
+					  if(loadData.set_current >= 0.99f)
+					  {
+						  is_current_offset_too_big = (loadData.set_current_offset > 0.1f*loadData.set_current);
+					  }
+					  else
+					  {
+						  is_current_offset_too_big = (loadData.set_current_offset > 0.1f);
+					  }
+
+					  // if offset too big (for example no load), restart check process
+					  if(is_current_offset_too_big)
 					  {
 						  loadData.offset_check_cntr = OFFSET_CHECK_DELAY_TICKS;
 						  loadData.set_current_offset = 0.0f;
